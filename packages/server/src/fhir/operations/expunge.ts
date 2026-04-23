@@ -1,6 +1,16 @@
 // SPDX-FileCopyrightText: Copyright Orangebot, Inc. and Medplum contributors
 // SPDX-License-Identifier: Apache-2.0
-import { accepted, allOk, concatUrls, forbidden, getResourceTypes, Operator } from '@medplum/core';
+import {
+  accepted,
+  allOk,
+  badRequest,
+  concatUrls,
+  forbidden,
+  getResourceTypes,
+  isResourceType,
+  OperationOutcomeError,
+  Operator,
+} from '@medplum/core';
 import type { FhirRequest, FhirResponse } from '@medplum/fhir-router';
 import type { ResourceType } from '@medplum/fhirtypes';
 import { getConfig } from '../../config/loader';
@@ -23,6 +33,9 @@ export async function expungeHandler(req: FhirRequest): Promise<FhirResponse> {
   }
 
   const { resourceType, id } = req.params;
+  if (!isResourceType(resourceType)) {
+    throw new OperationOutcomeError(badRequest('Invalid resource type'), { cause: resourceType });
+  }
   const { everything } = req.query;
   if (resourceType === 'Project' || everything === 'true') {
     // Only super admins can expunge a projects other than the current project

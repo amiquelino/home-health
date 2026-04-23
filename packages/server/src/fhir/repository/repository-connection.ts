@@ -3,12 +3,15 @@
 import type { OperationOutcomeError } from '@medplum/core';
 import { normalizeErrorString, sleep } from '@medplum/core';
 import { RepositoryMode } from '@medplum/fhir-router';
+import type { ResourceType } from '@medplum/fhirtypes';
 import type { Pool, PoolClient } from 'pg';
 import { getConfig } from '../../config/loader';
 import { DatabaseMode, getDatabasePool } from '../../database';
 import { getLogger } from '../../logger';
 import type { TransactionIsolationLevel } from '../sql';
 import { isRetryableTransactionError, normalizeDatabaseError } from '../sql';
+import type { RepositoryAccessLayer, RepositoryAccessOperation } from './access-tracker';
+import { createRepositoryAccessTracker } from './access-tracker';
 
 const defaultTransactionAttempts = 2;
 const defaultExpBackoffBaseDelayMs = 50;
@@ -48,6 +51,7 @@ export class RepositoryConnection implements Disposable {
   private preCommitCallbacks: (() => Promise<void>)[] = [];
   private postCommitCallbacks: (() => Promise<void>)[] = [];
   private callbackStack: CallbackFrame[] = [];
+  private readonly accessTracker = createRepositoryAccessTracker();
 
   /**
    * Creates a connection that owns any PoolClient it acquires.
@@ -78,6 +82,15 @@ export class RepositoryConnection implements Disposable {
 
   hasConnection(): boolean {
     return !!this.conn;
+  }
+
+  recordResourceAccess(
+    layer: RepositoryAccessLayer,
+    operation: RepositoryAccessOperation,
+    resourceTypes: Iterable<ResourceType>,
+    source: string
+  ): void {
+    this.accessTracker.recordResourceAccess(layer, operation, resourceTypes, source);
   }
 
   /**
@@ -285,6 +298,7 @@ export class RepositoryConnection implements Disposable {
     }
     this.transactionDepth = nextDepth;
     this.pushCallbackFrame();
+    this.accessTracker.pushTransactionFrame();
     return conn;
   }
 
@@ -299,6 +313,8 @@ export class RepositoryConnection implements Disposable {
       this.releaseConnection();
       this.clearCallbackStack();
       await this.processPostCommit();
+      const frame = this.accessTracker.popTransactionFrame();
+      this.accessTracker.logTransactionAccess(frame, 'committed');
     } else {
       // If RELEASE SAVEPOINT fails (e.g. transaction in aborted state), let the error propagate.
       // withTransaction's catch will invoke rollbackTransaction, which can run ROLLBACK TO SAVEPOINT
@@ -307,6 +323,7 @@ export class RepositoryConnection implements Disposable {
       await conn.query('RELEASE SAVEPOINT sp' + this.transactionDepth);
       this.transactionDepth--; // safe to decrement since assertInTransaction() ensures transactionDepth > 0
       this.popCallbackFrame();
+      this.accessTracker.mergeLastTransactionFrame();
     }
   }
 
@@ -340,6 +357,10 @@ export class RepositoryConnection implements Disposable {
     if (isOuter) {
       this.transactionIsolationLevel = undefined;
       this.releaseConnection(error);
+      const frame = this.accessTracker.popTransactionFrame();
+      this.accessTracker.logTransactionAccess(frame, 'rolled_back');
+    } else {
+      this.accessTracker.mergeLastTransactionFrame();
     }
   }
 
@@ -355,6 +376,7 @@ export class RepositoryConnection implements Disposable {
     this.transactionIsolationLevel = undefined;
     this.clearCallbackStack();
     this.releaseConnection(err);
+    this.accessTracker.clearTransactionFrames();
   }
 
   private endTransaction(): void {

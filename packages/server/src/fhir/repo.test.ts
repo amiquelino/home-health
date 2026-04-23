@@ -212,6 +212,76 @@ describe('FHIR Repo', () => {
     expect((results[5] as OperationOutcomeError).outcome.id).toBe('not-found');
   });
 
+  test('Logs mixed cache access for readReferences across split resource types', async () => {
+    const infoSpy = jest.spyOn(getLogger(), 'info').mockImplementation(() => {});
+    const project = await systemRepo.createResource<Project>({ resourceType: 'Project', name: 'Split Cache Project' });
+    const patient = await systemRepo.createResource<Patient>({ resourceType: 'Patient' });
+
+    await systemRepo.readReferences([{ reference: `Project/${project.id}` }, { reference: `Patient/${patient.id}` }]);
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      '[RepoSplit] Mixed resource access',
+      expect.objectContaining({
+        scope: 'statement',
+        layer: 'cache',
+        operation: 'read',
+        source: 'repo.getCacheEntries',
+        specialResourceTypes: ['Project'],
+        otherResourceTypes: ['Patient'],
+        resourceTypes: ['Patient', 'Project'],
+      })
+    );
+  });
+
+  test('Logs mixed SQL access for multi-type search across split resource types', async () => {
+    const infoSpy = jest.spyOn(getLogger(), 'info').mockImplementation(() => {});
+    await systemRepo.createResource<Project>({ resourceType: 'Project', name: 'Split Search Project' });
+    await systemRepo.createResource<Patient>({ resourceType: 'Patient' });
+
+    await systemRepo.search({
+      resourceType: 'Patient',
+      types: ['Project', 'Patient'],
+      count: 10,
+      offset: 0,
+    });
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      '[RepoSplit] Mixed resource access',
+      expect.objectContaining({
+        scope: 'statement',
+        layer: 'sql',
+        operation: 'read',
+        source: 'search.getSearchEntries',
+        specialResourceTypes: ['Project'],
+        otherResourceTypes: ['Patient'],
+        resourceTypes: ['Patient', 'Project'],
+      })
+    );
+  });
+
+  test('Logs mixed transaction access across repo and system repo', async () => {
+    const infoSpy = jest.spyOn(getLogger(), 'info').mockImplementation(() => {});
+    const project = await systemRepo.createResource<Project>({ resourceType: 'Project', name: 'Split Tx Project' });
+    const patient = await systemRepo.createResource<Patient>({ resourceType: 'Patient' });
+
+    await systemRepo.withTransaction(async () => {
+      await systemRepo.readResource('Patient', patient.id);
+      await systemRepo.getSystemRepo().readResource('Project', project.id);
+    });
+
+    expect(infoSpy).toHaveBeenCalledWith(
+      '[RepoSplit] Mixed transaction access',
+      expect.objectContaining({
+        scope: 'transaction',
+        status: 'committed',
+        specialResourceTypes: ['Project'],
+        otherResourceTypes: ['Patient'],
+        readResourceTypes: ['Patient', 'Project'],
+        writeResourceTypes: [],
+      })
+    );
+  });
+
   describe('Read history', () => {
     const versions: Record<string, WithId<Patient>> = {};
 
@@ -775,8 +845,8 @@ describe('FHIR Repo', () => {
     });
 
     try {
-      await repo.withTransaction(async (conn) => {
-        await repo.reindexResources(conn, [patient]);
+      await repo.withTransaction(async () => {
+        await repo.reindexResources([patient]);
       });
       fail('Expected error');
     } catch (err) {
@@ -808,8 +878,8 @@ describe('FHIR Repo', () => {
     const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => {});
 
     await expect(
-      systemRepo.withTransaction(async (conn) => {
-        await systemRepo.reindexResources(conn, [patient1]);
+      systemRepo.withTransaction(async () => {
+        await systemRepo.reindexResources([patient1]);
       })
     ).rejects.toThrow('test error');
     expect(errorSpy).toHaveBeenCalledWith('Error building row for resource', {

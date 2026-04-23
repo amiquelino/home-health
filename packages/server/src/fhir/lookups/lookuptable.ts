@@ -93,7 +93,7 @@ export abstract class LookupTable {
    * @param resourceBatchSize - (optional) The resource batch size to yield to the event loop between. Default is 200.
    */
   async batchIndexResources<T extends Resource>(
-    client: PoolClient,
+    client: Pool | PoolClient,
     resources: WithId<T>[],
     create: boolean,
     resourceBatchSize: number = 200

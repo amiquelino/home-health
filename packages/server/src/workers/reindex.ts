@@ -341,7 +341,7 @@ export class ReindexJob {
         }
         if (bundle.entry?.length) {
           const resources = bundle.entry.map((e) => e.resource as WithId<Resource>);
-          await systemRepo.reindexResources(conn, resources);
+          await systemRepo.reindexResources(resources);
           newCount += resources.length;
           nextTimestamp = bundle.entry.at(-1)?.resource?.meta?.lastUpdated ?? nextTimestamp;
         }
