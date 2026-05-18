@@ -119,12 +119,23 @@ export async function conceptMapImportHandler(req: FhirRequest): Promise<FhirRes
     return [badRequest('ConceptMap to import into must be specified', `Parameters.parameter.where(name = 'url')`)];
   }
 
-  await repo.withTransaction(async () => {
-    // `importConceptMap` does not read/write any resource type table; only derivative tables, so we can
-    // safely drop down to utilizing a raw database client here.
-    const db = repo.getDatabaseClient(DatabaseMode.WRITER);
-    await importConceptMap(db, conceptMap, params.mapping);
-  });
+  await repo.withTransaction(
+    async () => {
+      // `importConceptMap` does not read/write any resource type table; only derivative tables, so we can
+      // safely drop down to utilizing a raw database client here.
+      const db = repo.getDatabaseClient({
+        mode: DatabaseMode.WRITER,
+        operation: 'write',
+        resourceTypes: ['ConceptMap'],
+        source: 'conceptMapImportHandler.client',
+      });
+      await importConceptMap(db, conceptMap, params.mapping);
+    },
+    {
+      resourceTypes: ['ConceptMap'],
+      source: 'conceptMapImportHandler',
+    }
+  );
   return [allOk, conceptMap];
 }
 

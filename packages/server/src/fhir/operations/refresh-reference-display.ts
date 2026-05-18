@@ -5,6 +5,7 @@ import { allOk, badRequest, getDisplayString, isResourceType, pathToJSONPointer 
 import type { FhirRequest, FhirResponse } from '@medplum/fhir-router';
 import type { Operation } from 'rfc6902';
 import { getAuthenticatedContext } from '../../context';
+import { DatabaseMode } from '../../database';
 import { collectReferences } from '../references';
 
 export async function refreshReferenceDisplayHandler(req: FhirRequest): Promise<FhirResponse> {
@@ -17,30 +18,38 @@ export async function refreshReferenceDisplayHandler(req: FhirRequest): Promise<
   }
 
   const { repo } = getAuthenticatedContext();
-  const updated = await repo.ensureInTransaction(async () => {
-    const resource = await repo.readResource(resourceType, id);
+  const updated = await repo.ensureInTransaction(
+    async () => {
+      const resource = await repo.readResource(resourceType, id);
 
-    const referenceMap = collectReferences(resource);
-    const references: TypedValueWithPath[] = [];
-    for (const path of Object.keys(referenceMap)) {
-      references.push(...referenceMap[path]);
-    }
-    const resolved = await repo.readReferences(references.map((r) => r.value));
+      const referenceMap = collectReferences(resource);
+      const references: TypedValueWithPath[] = [];
+      for (const path of Object.keys(referenceMap)) {
+        references.push(...referenceMap[path]);
+      }
+      const resolved = await repo.readReferences(references.map((r) => r.value));
 
-    const patch: Operation[] = [];
-    for (let i = 0; i < resolved.length; i++) {
-      const resource = resolved[i];
-      if (resource instanceof Error) {
-        continue;
+      const patch: Operation[] = [];
+      for (let i = 0; i < resolved.length; i++) {
+        const resource = resolved[i];
+        if (resource instanceof Error) {
+          continue;
+        }
+
+        const path = pathToJSONPointer(references[i].path) + '/display';
+        const value = getDisplayString(resource);
+        patch.push({ op: 'add', path, value });
       }
 
-      const path = pathToJSONPointer(references[i].path) + '/display';
-      const value = getDisplayString(resource);
-      patch.push({ op: 'add', path, value });
+      return repo.patchResource(resourceType, id, patch);
+    },
+    {
+      mode: DatabaseMode.WRITER,
+      operation: 'write',
+      resourceTypes: [resourceType],
+      source: 'refreshReferenceDisplayHandler',
     }
-
-    return repo.patchResource(resourceType, id, patch);
-  });
+  );
 
   return [allOk, updated];
 }

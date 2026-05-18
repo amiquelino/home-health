@@ -948,18 +948,24 @@ async function autoDisableSubscription(
       { op: 'add', path: '/error', value: errorMessage },
     ];
 
-    await systemRepo.withTransaction(async () => {
-      await systemRepo.patchResource('Subscription', subscription.id, patch);
+    await systemRepo.withTransaction(
+      async () => {
+        await systemRepo.patchResource('Subscription', subscription.id, patch);
 
-      await createSubscriptionAuditEvent(
-        systemRepo,
-        subscription,
-        new Date().toISOString(),
-        AuditEventOutcome.SeriousFailure,
-        errorMessage,
-        subscription
-      );
-    });
+        await createSubscriptionAuditEvent(
+          systemRepo,
+          subscription,
+          new Date().toISOString(),
+          AuditEventOutcome.SeriousFailure,
+          errorMessage,
+          subscription
+        );
+      },
+      {
+        resourceTypes: ['AuditEvent', 'Subscription'],
+        source: 'subscription.autoDisableSubscription',
+      }
+    );
 
     await clearSubscriptionFailures(subscription.id);
 

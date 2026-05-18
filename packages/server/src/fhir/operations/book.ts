@@ -253,7 +253,11 @@ export async function appointmentBookHandler(req: FhirRequest): Promise<FhirResp
       });
       return [appointment, ...createdSlots, ...createdBufferSlots];
     },
-    { serializable: true }
+    {
+      resourceTypes: ['Appointment', 'Schedule', 'Slot'],
+      source: 'bookOperation',
+      serializable: true,
+    }
   );
 
   const bundle: Bundle = {

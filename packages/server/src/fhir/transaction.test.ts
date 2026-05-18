@@ -12,6 +12,27 @@ import { createTestProject, withTestContext } from '../test.setup';
 import type { Repository, SystemRepository } from './repo';
 import { PostgresError } from './sql';
 
+function withTestTransaction<TResult>(
+  repo: Repository,
+  callback: () => Promise<TResult>,
+  options?: { serializable?: boolean }
+): Promise<TResult> {
+  return repo.withTransaction(callback, {
+    resourceTypes: [],
+    source: 'transaction.test',
+    ...options,
+  });
+}
+
+function getTestDatabaseClient(repo: Repository, mode: DatabaseMode): ReturnType<Repository['getDatabaseClient']> {
+  return repo.getDatabaseClient({
+    mode,
+    operation: mode === DatabaseMode.READER ? 'read' : 'write',
+    resourceTypes: [],
+    source: 'transaction.test',
+  });
+}
+
 describe('FHIR Repo Transactions', () => {
   let repo: Repository;
   let systemRepo: SystemRepository;
@@ -31,7 +52,7 @@ describe('FHIR Repo Transactions', () => {
   test('Transaction commit', () =>
     withTestContext(async () => {
       let patient: Patient | undefined;
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         patient = await repo.createResource<Patient>({ resourceType: 'Patient' });
         expect(patient).toBeDefined();
       });
@@ -56,7 +77,7 @@ describe('FHIR Repo Transactions', () => {
       let patient: WithId<Patient> | undefined;
 
       await expect(
-        repo.withTransaction(async () => {
+        withTestTransaction(repo, async () => {
           // Create one patient
           // This will initially succeed, but should then be rolled back
           patient = await repo.createResource<Patient>({ resourceType: 'Patient' });
@@ -113,11 +134,11 @@ describe('FHIR Repo Transactions', () => {
       let patient1: Patient | undefined;
       let patient2: Patient | undefined;
 
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         patient1 = await repo.createResource<Patient>({ resourceType: 'Patient' });
         expect(patient1).toBeDefined();
 
-        await repo.withTransaction(async () => {
+        await withTestTransaction(repo, async () => {
           patient2 = await repo.createResource<Patient>({ resourceType: 'Patient' });
           expect(patient2).toBeDefined();
         });
@@ -158,7 +179,7 @@ describe('FHIR Repo Transactions', () => {
       let patient2: Patient | undefined;
 
       // Start an outer transaction - this should succeed
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         // Create one patient
         // This will initially succeed, and should not be rolled back
         patient1 = await repo.createResource<Patient>({ resourceType: 'Patient' });
@@ -166,7 +187,7 @@ describe('FHIR Repo Transactions', () => {
 
         // Start an inner transaction - this will be rolled back
         await expect(
-          repo.withTransaction(async () => {
+          withTestTransaction(repo, async () => {
             patient2 = await repo.createResource<Patient>({ resourceType: 'Patient' });
             expect(patient2).toBeDefined();
 
@@ -253,7 +274,7 @@ describe('FHIR Repo Transactions', () => {
       let patient2: Patient | undefined;
 
       // Start an outer transaction - this should succeed
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         // Create one patient
         // This will initially succeed, and should not be rolled back
         patient1 = await repo.createResource<Patient>({ resourceType: 'Patient' });
@@ -261,7 +282,7 @@ describe('FHIR Repo Transactions', () => {
 
         // Start an inner transaction - this will be rolled back
         await expect(
-          repo.withTransaction(async () => {
+          withTestTransaction(repo, async () => {
             patient2 = await repo.createResource<Patient>({ resourceType: 'Patient' });
             expect(patient2).toBeDefined();
 
@@ -358,7 +379,7 @@ describe('FHIR Repo Transactions', () => {
   test('Post-commit callback', () =>
     withTestContext(async () => {
       const callback = jest.fn();
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         await repo.postCommit(async () => {
           callback();
         });
@@ -371,7 +392,7 @@ describe('FHIR Repo Transactions', () => {
     withTestContext(async () => {
       const callback = jest.fn();
       try {
-        await repo.withTransaction(async () => {
+        await withTestTransaction(repo, async () => {
           await repo.postCommit(async () => {
             callback();
           });
@@ -389,11 +410,11 @@ describe('FHIR Repo Transactions', () => {
     withTestContext(async () => {
       const cb1 = jest.fn();
       const cb2 = jest.fn();
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         await repo.postCommit(async () => {
           cb1();
         });
-        await repo.withTransaction(async () => {
+        await withTestTransaction(repo, async () => {
           await repo.postCommit(async () => {
             cb2();
           });
@@ -411,7 +432,7 @@ describe('FHIR Repo Transactions', () => {
       const callback = jest.fn();
       let calledBeforeCommit = false;
 
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         await repo.getSystemRepo().postCommit(callback);
         calledBeforeCommit = callback.mock.calls.length > 0;
       });
@@ -424,11 +445,11 @@ describe('FHIR Repo Transactions', () => {
     withTestContext(async () => {
       let queries: string[] = [];
 
-      await repo.withTransaction(async () => {
-        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
+      await withTestTransaction(repo, async () => {
+        const client = getTestDatabaseClient(repo, DatabaseMode.WRITER);
         const querySpy = jest.spyOn(client, 'query');
         try {
-          await repo.getSystemRepo().withTransaction(async () => undefined);
+          await withTestTransaction(repo.getSystemRepo(), async () => undefined);
         } finally {
           queries = querySpy.mock.calls.map(([query]) =>
             typeof query === 'string' ? query : (query as { text: string }).text
@@ -448,7 +469,7 @@ describe('FHIR Repo Transactions', () => {
       let patient: WithId<Patient> | undefined;
       let cacheReadDuringTransaction = false;
 
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         patient = await repo.getSystemRepo().createResource<Patient>({ resourceType: 'Patient' });
         try {
           await systemRepo.readResource<Patient>('Patient', patient.id, { checkCacheOnly: true });
@@ -470,7 +491,7 @@ describe('FHIR Repo Transactions', () => {
       const callbackFn = jest.fn();
       let patient: WithId<Patient> | undefined;
       await expect(
-        repo.withTransaction(async () => {
+        withTestTransaction(repo, async () => {
           const clonedRepo = repo.clone();
           patient = await clonedRepo.createResource<Patient>({ resourceType: 'Patient' });
           await clonedRepo.postCommit(callbackFn);
@@ -488,14 +509,14 @@ describe('FHIR Repo Transactions', () => {
     withTestContext(async () => {
       const existing = await repo.createResource<Patient>({ resourceType: 'Patient' });
 
-      const tx1 = repo.withTransaction(async () => {
+      const tx1 = withTestTransaction(repo, async () => {
         await repo.updateResource({ ...existing, gender: 'unknown' });
         await sleep(500);
       });
 
       await sleep(250);
 
-      const tx2 = systemRepo.withTransaction(async () => {
+      const tx2 = withTestTransaction(systemRepo, async () => {
         await systemRepo.updateResource({ ...existing, deceasedBoolean: false });
       });
 
@@ -511,7 +532,8 @@ describe('FHIR Repo Transactions', () => {
         resourceType: 'Patient',
         identifier: [{ system: 'http://example.com/mrn', value: identifier }],
       };
-      const tx1 = repo.withTransaction(
+      const tx1 = withTestTransaction(
+        repo,
         async () => {
           const existing = await repo.searchResources(parseSearchRequest(criteria));
           if (!existing.length) {
@@ -522,7 +544,8 @@ describe('FHIR Repo Transactions', () => {
         { serializable: true }
       );
 
-      const tx2 = systemRepo.withTransaction(
+      const tx2 = withTestTransaction(
+        systemRepo,
         async () => {
           await sleep(250);
           const existing = await systemRepo.searchResources(parseSearchRequest(criteria));
@@ -545,7 +568,7 @@ describe('FHIR Repo Transactions', () => {
         resourceType: 'Patient',
         identifier: [{ system: 'http://example.com/mrn', value: identifier }],
       };
-      const tx1 = repo.withTransaction(async () => {
+      const tx1 = withTestTransaction(repo, async () => {
         const existing = await repo.searchResources(parseSearchRequest(criteria));
         if (!existing.length) {
           await repo.createResource(resource);
@@ -553,7 +576,7 @@ describe('FHIR Repo Transactions', () => {
         await sleep(500);
       });
 
-      const tx2 = systemRepo.withTransaction(async () => {
+      const tx2 = withTestTransaction(systemRepo, async () => {
         await sleep(250);
         const existing = await systemRepo.searchResources(parseSearchRequest(criteria));
         if (!existing.length) {
@@ -570,7 +593,7 @@ describe('FHIR Repo Transactions', () => {
       const existing = await repo.createResource<Patient>({ resourceType: 'Patient' });
 
       // Simulate patch operation with long delay in the middle to ensure conflict
-      const tx1 = repo.withTransaction(async () => {
+      const tx1 = withTestTransaction(repo, async () => {
         await repo.searchResources(parseSearchRequest('Patient?_id=' + existing.id)); // Ensure request hits the DB
         await sleep(500);
         return repo.updateResource({ ...existing, gender: 'other' });
@@ -598,7 +621,7 @@ describe('FHIR Repo Transactions', () => {
         }
       });
 
-      await expect(repo.withTransaction(txFn)).resolves.toStrictEqual(true);
+      await expect(withTestTransaction(repo, txFn)).resolves.toStrictEqual(true);
       expect(txFn).toHaveBeenCalledTimes(2);
     }));
 
@@ -615,7 +638,7 @@ describe('FHIR Repo Transactions', () => {
         }
       });
 
-      await expect(repo.withTransaction(txFn)).rejects.toThrow('a different conflict');
+      await expect(withTestTransaction(repo, txFn)).rejects.toThrow('a different conflict');
       expect(txFn).toHaveBeenCalledTimes(1);
     }));
 
@@ -634,7 +657,7 @@ describe('FHIR Repo Transactions', () => {
         }
       });
 
-      await expect(repo.withTransaction(txFn)).rejects.toThrow('transaction conflict; invalid data');
+      await expect(withTestTransaction(repo, txFn)).rejects.toThrow('transaction conflict; invalid data');
       expect(txFn).toHaveBeenCalledTimes(1);
     }));
 
@@ -645,7 +668,7 @@ describe('FHIR Repo Transactions', () => {
         throw new OperationOutcomeError(conflict('transaction conflict', PostgresError.SerializationFailure));
       });
 
-      await expect(repo.withTransaction(txFn)).rejects.toThrow('transaction conflict');
+      await expect(withTestTransaction(repo, txFn)).rejects.toThrow('transaction conflict');
       expect(txFn).toHaveBeenCalledTimes(2);
     }));
 
@@ -661,9 +684,9 @@ describe('FHIR Repo Transactions', () => {
           throw new OperationOutcomeError(conflict('transaction', PostgresError.SerializationFailure));
         }
       });
-      const outerTx = jest.fn(async (): Promise<boolean> => repo.withTransaction(txFn));
+      const outerTx = jest.fn(async (): Promise<boolean> => withTestTransaction(repo, txFn));
 
-      await expect(repo.withTransaction(outerTx)).resolves.toStrictEqual(true);
+      await expect(withTestTransaction(repo, outerTx)).resolves.toStrictEqual(true);
       expect(txFn).toHaveBeenCalledTimes(2);
       expect(outerTx).toHaveBeenCalledTimes(2);
     }));
@@ -674,9 +697,9 @@ describe('FHIR Repo Transactions', () => {
         // Emit transaction conflict (Postgres error code 40001)
         throw new OperationOutcomeError(conflict('transaction conflict', PostgresError.SerializationFailure));
       });
-      const outerTx = jest.fn(async (): Promise<boolean> => repo.withTransaction(txFn));
+      const outerTx = jest.fn(async (): Promise<boolean> => withTestTransaction(repo, txFn));
 
-      await expect(repo.withTransaction(outerTx)).rejects.toThrow('transaction conflict');
+      await expect(withTestTransaction(repo, outerTx)).rejects.toThrow('transaction conflict');
       expect(txFn).toHaveBeenCalledTimes(2);
       expect(outerTx).toHaveBeenCalledTimes(2);
     }));
@@ -689,7 +712,7 @@ describe('FHIR Repo Transactions', () => {
       });
       const outerTx = jest.fn(async (): Promise<boolean> => {
         try {
-          await repo.withTransaction(txFn);
+          await withTestTransaction(repo, txFn);
           return true;
         } catch (_) {
           // Swallow the error
@@ -697,7 +720,7 @@ describe('FHIR Repo Transactions', () => {
         }
       });
 
-      await expect(repo.withTransaction(outerTx)).resolves.toStrictEqual(false);
+      await expect(withTestTransaction(repo, outerTx)).resolves.toStrictEqual(false);
       expect(txFn).toHaveBeenCalledTimes(1);
       expect(outerTx).toHaveBeenCalledTimes(1);
     }));

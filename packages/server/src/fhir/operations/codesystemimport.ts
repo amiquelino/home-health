@@ -104,12 +104,23 @@ export async function codeSystemImportHandler(req: FhirRequest): Promise<FhirRes
   }
 
   try {
-    await repo.withTransaction(async () => {
-      // `importCodeSystem` does not read/write any resource type table; only derivative tables, so we can
-      // safely drop down to utilizing a raw database client here.
-      const db = repo.getDatabaseClient(DatabaseMode.WRITER);
-      await importCodeSystem(db, codeSystem, params.concept, params.property, params.designation);
-    });
+    await repo.withTransaction(
+      async () => {
+        // `importCodeSystem` does not read/write any resource type table; only derivative tables, so we can
+        // safely drop down to utilizing a raw database client here.
+        const db = repo.getDatabaseClient({
+          mode: DatabaseMode.WRITER,
+          operation: 'write',
+          resourceTypes: ['CodeSystem'],
+          source: 'codeSystemImportHandler.client',
+        });
+        await importCodeSystem(db, codeSystem, params.concept, params.property, params.designation);
+      },
+      {
+        resourceTypes: ['CodeSystem'],
+        source: 'codeSystemImportHandler',
+      }
+    );
   } catch (err) {
     return [normalizeOperationOutcome(err)];
   }

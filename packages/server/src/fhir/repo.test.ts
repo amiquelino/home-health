@@ -51,6 +51,27 @@ import * as tokenColumnModule from './token-column';
 
 jest.mock('hibp');
 
+function withTestTransaction<TResult>(
+  repo: Repository,
+  callback: () => Promise<TResult>,
+  options?: { serializable?: boolean }
+): Promise<TResult> {
+  return repo.withTransaction(callback, {
+    resourceTypes: [],
+    source: 'repo.test',
+    ...options,
+  });
+}
+
+function getTestDatabaseClient(repo: Repository, mode: DatabaseMode): ReturnType<Repository['getDatabaseClient']> {
+  return repo.getDatabaseClient({
+    mode,
+    operation: mode === DatabaseMode.READER ? 'read' : 'write',
+    resourceTypes: [],
+    source: 'repo.test',
+  });
+}
+
 describe('FHIR Repo', () => {
   const globalSystemRepo = getGlobalSystemRepo();
   let testProject: WithId<Project>;
@@ -265,7 +286,7 @@ describe('FHIR Repo', () => {
     const project = await systemRepo.createResource<Project>({ resourceType: 'Project', name: 'Split Tx Project' });
     const patient = await systemRepo.createResource<Patient>({ resourceType: 'Patient' });
 
-    await systemRepo.withTransaction(async () => {
+    await withTestTransaction(systemRepo, async () => {
       await systemRepo.readResource('Patient', patient.id);
       await systemRepo.getSystemRepo().readResource('Project', project.id);
     });
@@ -846,7 +867,7 @@ describe('FHIR Repo', () => {
     });
 
     try {
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         await repo.reindexResources([patient]);
       });
       fail('Expected error');
@@ -879,7 +900,7 @@ describe('FHIR Repo', () => {
     const errorSpy = jest.spyOn(logger, 'error').mockImplementation(() => {});
 
     await expect(
-      systemRepo.withTransaction(async () => {
+      withTestTransaction(systemRepo, async () => {
         await systemRepo.reindexResources([patient1]);
       })
     ).rejects.toThrow('test error');
@@ -1022,7 +1043,7 @@ describe('FHIR Repo', () => {
 
     async function countRows(tableName: string, id: string): Promise<number> {
       const query = new SelectQuery(tableName).column('id').where('id', '=', id);
-      return (await query.execute(systemRepo.getDatabaseClient(DatabaseMode.READER))).length;
+      return (await query.execute(getTestDatabaseClient(systemRepo, DatabaseMode.READER))).length;
     }
 
     async function expectPatientExpunged(patient: WithId<Patient>): Promise<void> {
@@ -1418,7 +1439,7 @@ describe('FHIR Repo', () => {
 
   async function getProjectIdColumn(id: string): Promise<string | null> {
     const projectIdQuery = new SelectQuery('User').column('projectId').where('id', '=', id);
-    const client = systemRepo.getDatabaseClient(DatabaseMode.WRITER);
+    const client = getTestDatabaseClient(systemRepo, DatabaseMode.WRITER);
     return (await projectIdQuery.execute(client))[0].projectId;
   }
 
@@ -1462,7 +1483,7 @@ describe('FHIR Repo', () => {
       const patients: WithId<Patient>[] = [];
       let shouldError = true;
 
-      const createdPatient = await repo.withTransaction(async () => {
+      const createdPatient = await withTestTransaction(repo, async () => {
         const patient = await repo.createResource<Patient>({ resourceType: 'Patient' });
         patients.push(patient);
 
@@ -1527,10 +1548,10 @@ describe('FHIR Repo', () => {
     const postCommit = jest.fn();
     let shouldError = true;
 
-    await repo.withTransaction(async () => {
+    await withTestTransaction(repo, async () => {
       await repo.postCommit(postCommit);
 
-      await repo.withTransaction(async () => {
+      await withTestTransaction(repo, async () => {
         if (shouldError) {
           shouldError = false;
           throw Object.assign(new Error('serialization failure'), { code: PostgresError.SerializationFailure });
@@ -1545,9 +1566,9 @@ describe('FHIR Repo', () => {
     const repo = systemRepo;
     const postCommit = jest.fn();
 
-    await repo.withTransaction(async () => {
+    await withTestTransaction(repo, async () => {
       try {
-        await repo.withTransaction(async () => {
+        await withTestTransaction(repo, async () => {
           await repo.postCommit(postCommit);
           throw Object.assign(new Error('serialization failure'), { code: PostgresError.SerializationFailure });
         });
@@ -1568,8 +1589,8 @@ describe('FHIR Repo', () => {
     let releaseSpy: jest.SpyInstance | undefined;
 
     await expect(
-      repo.withTransaction(async () => {
-        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
+      withTestTransaction(repo, async () => {
+        const client = getTestDatabaseClient(repo, DatabaseMode.WRITER);
         querySpy = jest.spyOn(client, 'query').mockImplementation(() => {
           // Simulates a session killed by idle_in_transaction_session_timeout: every query
           // issued on the client — including the ROLLBACK the error handler sends — rejects.
@@ -1618,12 +1639,12 @@ describe('FHIR Repo', () => {
     let releaseSpy: jest.SpyInstance | undefined;
 
     await repo.withStatementTimeout({ timeoutMs: 0 }, async () => {
-      const outerClient = repo.getDatabaseClient(DatabaseMode.WRITER);
+      const outerClient = getTestDatabaseClient(repo, DatabaseMode.WRITER);
       assert('release' in outerClient); // discern PoolClient from Pool | PoolClient
       releaseSpy = jest.spyOn(outerClient, 'release');
 
-      await repo.withTransaction(async () => {
-        const innerClient = repo.getDatabaseClient(DatabaseMode.WRITER);
+      await withTestTransaction(repo, async () => {
+        const innerClient = getTestDatabaseClient(repo, DatabaseMode.WRITER);
         expect(innerClient).toBe(outerClient);
       });
 
@@ -1637,7 +1658,7 @@ describe('FHIR Repo', () => {
   test('withStatementTimeout rejects borrowed repository connections', async () => {
     const { repo } = await createTestProject({ withRepo: true });
 
-    await repo.withTransaction(async () => {
+    await withTestTransaction(repo, async () => {
       await expect(repo.getSystemRepo().withStatementTimeout({ timeoutMs: 0 }, async () => undefined)).rejects.toThrow(
         'borrowed repository connection'
       );
@@ -1647,7 +1668,7 @@ describe('FHIR Repo', () => {
   test('withStatementTimeout rejects active transactions', async () => {
     const { repo } = await createTestProject({ withRepo: true });
 
-    await repo.withTransaction(async () => {
+    await withTestTransaction(repo, async () => {
       await expect(repo.withStatementTimeout({ timeoutMs: 0 }, async () => undefined)).rejects.toThrow(
         'active transaction'
       );
@@ -1663,7 +1684,7 @@ describe('FHIR Repo', () => {
         repo.withStatementTimeout({ timeoutMs: 0, mode: DatabaseMode.READER }, async () => {
           // The timeout wrapper pins one physical reader client. A nested transaction
           // must not silently reuse that reader client for writer work.
-          await repo.withTransaction(async () => undefined);
+          await withTestTransaction(repo, async () => undefined);
         })
       ).rejects.toThrow('reader database connection');
     } finally {
@@ -1690,7 +1711,7 @@ describe('FHIR Repo', () => {
     const errorSpy = jest.spyOn(getLogger(), 'error').mockImplementation(() => {});
 
     try {
-      await expect(repo.withTransaction(async () => Promise.reject(new Error('work failed')))).rejects.toThrow(
+      await expect(withTestTransaction(repo, async () => Promise.reject(new Error('work failed')))).rejects.toThrow(
         'work failed'
       );
 
@@ -1698,7 +1719,7 @@ describe('FHIR Repo', () => {
       // after the fatal rollback path but never releases a client it does not own.
       expect(client.release).not.toHaveBeenCalled();
 
-      await expect(repo.withTransaction(async () => undefined)).rejects.toThrow(
+      await expect(withTestTransaction(repo, async () => undefined)).rejects.toThrow(
         'Borrowed repository connection is no longer available'
       );
     } finally {
@@ -1720,7 +1741,7 @@ describe('FHIR Repo', () => {
     const errorSpy = jest.spyOn(getLogger(), 'error').mockImplementation(() => {});
 
     try {
-      await expect(repo.withTransaction(async () => undefined)).rejects.toThrow('begin failed');
+      await expect(withTestTransaction(repo, async () => undefined)).rejects.toThrow('begin failed');
 
       // BEGIN never succeeded, so the in-memory state must not claim an active
       // transaction or hold callback frames for one.
@@ -1744,8 +1765,8 @@ describe('FHIR Repo', () => {
       RepositoryConnection.borrowClient(client, { mode: DatabaseMode.WRITER })
     );
 
-    await repo.withTransaction(async () => {
-      await expect(repo.withTransaction(async () => undefined, { serializable: true })).rejects.toThrow(
+    await withTestTransaction(repo, async () => {
+      await expect(withTestTransaction(repo, async () => undefined, { serializable: true })).rejects.toThrow(
         'Cannot start SERIALIZABLE transaction inside active REPEATABLE READ transaction'
       );
     });
@@ -1764,9 +1785,10 @@ describe('FHIR Repo', () => {
       RepositoryConnection.borrowClient(client, { mode: DatabaseMode.WRITER })
     );
 
-    await repo.withTransaction(
+    await withTestTransaction(
+      repo,
       async () => {
-        await repo.withTransaction(async () => undefined);
+        await withTestTransaction(repo, async () => undefined);
       },
       { serializable: true }
     );
@@ -1785,7 +1807,7 @@ describe('FHIR Repo', () => {
     const finalPostCommit = jest.fn();
 
     const error = new Error('Post-commit hook failed');
-    const promise = repo.withTransaction(async () => {
+    const promise = withTestTransaction(repo, async () => {
       await repo.postCommit(async () => {
         throw new Error('Post-commit hook failed');
       });
@@ -1841,8 +1863,8 @@ describe('FHIR Repo', () => {
         patient.link?.push({ type: 'seealso', other: { reference: 'Patient/' + randomUUID() } });
       }
 
-      await repo.withTransaction(async () => {
-        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
+      await withTestTransaction(repo, async () => {
+        const client = getTestDatabaseClient(repo, DatabaseMode.WRITER);
         const querySpy = jest.spyOn(client, 'query');
         await repo.createResource(patient);
         const calls = querySpy.mock.calls;
@@ -1864,7 +1886,7 @@ describe('FHIR Repo', () => {
 
       const versionQuery = new SelectQuery('Patient').column('__version').where('id', '=', patient.id);
 
-      const client = repo.getDatabaseClient(DatabaseMode.WRITER);
+      const client = getTestDatabaseClient(repo, DatabaseMode.WRITER);
       expect((await versionQuery.execute(client))[0].__version).toStrictEqual(Repository.VERSION);
 
       // Simulate the resource being at an older version
@@ -2029,13 +2051,13 @@ describe('FHIR Repo', () => {
       const { repo } = await createTestProject({ withRepo: true });
 
       let checked = false;
-      await repo.withTransaction(async () => {
-        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
+      await withTestTransaction(repo, async () => {
+        const client = getTestDatabaseClient(repo, DatabaseMode.WRITER);
         // starting a transaction will have pinned a connection to `repo`.
         // so ensure that cloning after that pinning does not propagate the pinned connection
         // to the cloned repository.
         const clonedRepo1 = repo.clone();
-        expect(clonedRepo1.getDatabaseClient(DatabaseMode.WRITER)).not.toBe(client);
+        expect(getTestDatabaseClient(clonedRepo1, DatabaseMode.WRITER)).not.toBe(client);
         checked = true;
       });
       expect(checked).toBe(true);

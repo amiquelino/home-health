@@ -53,7 +53,11 @@ export async function appointmentCancelHandler(req: FhirRequest): Promise<FhirRe
       await Promise.all(slots.map((slot) => ctx.repo.deleteResource('Slot', slot.id)));
       return updatedAppointment;
     },
-    { serializable: true }
+    {
+      resourceTypes: ['Appointment', 'Slot'],
+      source: 'appointmentCancelHandler',
+      serializable: true,
+    }
   );
 
   return [allOk, buildOutputParameters(cancelOperation, updatedAppointment)];

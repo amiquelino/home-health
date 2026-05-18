@@ -10,7 +10,12 @@ import { DatabaseMode, getDatabasePool } from '../../database';
 import { getLogger } from '../../logger';
 import type { TransactionIsolationLevel } from '../sql';
 import { isRetryableTransactionError, normalizeDatabaseError } from '../sql';
-import type { RepositoryAccessLayer, RepositoryAccessOperation } from './access-tracker';
+import type {
+  ExecuteSqlOptions,
+  RepositoryAccessLayer,
+  RepositoryAccessOperation,
+  TransactionSqlOptions,
+} from './access-tracker';
 import { createRepositoryAccessTracker } from './access-tracker';
 
 const defaultTransactionAttempts = 2;
@@ -100,10 +105,15 @@ export class RepositoryConnection implements Disposable {
    * The return value can either be a pool client or a pool.
    * If in a transaction, then returns the transaction client (PoolClient).
    * Otherwise, returns the pool (Pool).
-   * @param mode - The database mode.
+   * @param options - SQL execution metadata.
    * @returns The database client.
    */
-  getDatabaseClient(mode: DatabaseMode): Pool | PoolClient {
+  getDatabaseClient(options: ExecuteSqlOptions): Pool | PoolClient {
+    this.recordResourceAccess('sql', options.operation, options.resourceTypes, options.source);
+    return this.getDatabaseClientForMode(options.mode);
+  }
+
+  private getDatabaseClientForMode(mode: DatabaseMode): Pool | PoolClient {
     this.assertNotClosed();
     if (this.conn) {
       // A held client might be pinned outside a transaction, but it still has one physical
@@ -200,10 +210,7 @@ export class RepositoryConnection implements Disposable {
     }
   }
 
-  async withTransaction<TResult>(
-    callback: () => Promise<TResult>,
-    options?: { serializable?: boolean }
-  ): Promise<TResult> {
+  async withTransaction<TResult>(callback: () => Promise<TResult>, options: TransactionSqlOptions): Promise<TResult> {
     this.assertNotClosed();
     const isolationLevel = options?.serializable ? 'SERIALIZABLE' : 'REPEATABLE READ';
     this.assertCompatibleTransactionIsolationLevel(isolationLevel);
@@ -215,6 +222,7 @@ export class RepositoryConnection implements Disposable {
       const attemptStartTime = Date.now();
       try {
         await this.beginTransaction(isolationLevel);
+        this.recordResourceAccess('sql', 'transaction', options.resourceTypes, options.source);
         const result = await callback();
         await this.commitTransaction();
         if (attempt > 0) {
@@ -414,6 +422,12 @@ export class RepositoryConnection implements Disposable {
     }
   }
 
+  private assertTransactionDatabaseMode(mode: DatabaseMode): void {
+    if (mode !== DatabaseMode.WRITER) {
+      throw new Error('Transactions require writer database mode');
+    }
+  }
+
   private assertCompatibleTransactionIsolationLevel(isolationLevel: TransactionIsolationLevel): void {
     if (this.transactionDepth === 0) {
       return;
@@ -429,11 +443,13 @@ export class RepositoryConnection implements Disposable {
     }
   }
 
-  async ensureInTransaction<TResult>(callback: () => Promise<TResult>): Promise<TResult> {
+  async ensureInTransaction<TResult>(callback: () => Promise<TResult>, options: ExecuteSqlOptions): Promise<TResult> {
+    this.assertTransactionDatabaseMode(options.mode);
     if (this.transactionDepth) {
+      this.recordResourceAccess('sql', options.operation, options.resourceTypes, options.source);
       return callback();
     } else {
-      return this.withTransaction(callback);
+      return this.withTransaction(callback, options);
     }
   }
 

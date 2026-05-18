@@ -317,8 +317,9 @@ export class ReindexJob {
     let cursor = '';
     let nextTimestamp = new Date(0).toISOString();
     try {
-      await systemRepo.withTransaction(async () => {
-        /*
+      await systemRepo.withTransaction(
+        async () => {
+          /*
         When a ReindexJob needs to scan a very large table for resources to reindex,
         but most/all have already been reindexed, the search will scan the most/all of table
         before finding any results with a query such as the following. Depending on factors
@@ -365,7 +366,12 @@ export class ReindexJob {
         if (nextLink) {
           cursor = parseSearchRequest(nextLink.url).cursor ?? '';
         }
-      });
+        },
+        {
+          resourceTypes: [resourceType],
+          source: 'ReindexJobExecutor.processIteration',
+        }
+      );
     } catch (err: any) {
       return { count: newCount, cursor, nextTimestamp, err, errSearchRequest: searchRequest };
     }

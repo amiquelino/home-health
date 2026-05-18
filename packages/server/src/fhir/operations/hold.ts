@@ -75,7 +75,11 @@ export async function appointmentHoldHandler(req: FhirRequest): Promise<FhirResp
       });
       return [createdAppointment, ...createdSlots];
     },
-    { serializable: true }
+    {
+      resourceTypes: ['Appointment', 'HealthcareService', 'Schedule', 'Slot'],
+      source: 'holdOperation',
+      serializable: true,
+    }
   );
   const bundle: Bundle = {
     resourceType: 'Bundle',
