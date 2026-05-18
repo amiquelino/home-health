@@ -52,7 +52,7 @@ export type RepositoryMode = (typeof RepositoryMode)[keyof typeof RepositoryMode
  * Additionally, several convenience method implementations are provided to offer advanced functionality on top of the
  * abstract basic operations.
  */
-export abstract class FhirRepository<TClient = unknown> {
+export abstract class FhirRepository {
   /**
    * Sets the repository mode.
    * In general, it is assumed that repositories will start in "reader" mode,
@@ -198,7 +198,7 @@ export abstract class FhirRepository<TClient = unknown> {
    * @param callback - The callback function to be run within a transaction.
    */
   abstract withTransaction<TResult>(
-    callback: (client: TClient) => Promise<TResult>,
+    callback: () => Promise<TResult>,
     options?: { serializable?: boolean }
   ): Promise<TResult>;
 
@@ -401,7 +401,7 @@ export abstract class FhirRepository<TClient = unknown> {
   }
 }
 
-export class MemoryRepository extends FhirRepository<undefined> {
+export class MemoryRepository extends FhirRepository {
   private readonly resources: Map<string, Map<string, Resource>>;
   private readonly history: Map<string, Map<string, Resource[]>>;
   private seeding: boolean;

@@ -201,7 +201,7 @@ export class RepositoryConnection implements Disposable {
   }
 
   async withTransaction<TResult>(
-    callback: (client: PoolClient) => Promise<TResult>,
+    callback: () => Promise<TResult>,
     options?: { serializable?: boolean }
   ): Promise<TResult> {
     this.assertNotClosed();
@@ -214,8 +214,8 @@ export class RepositoryConnection implements Disposable {
     for (let attempt = 0; attempt < transactionAttempts; attempt++) {
       const attemptStartTime = Date.now();
       try {
-        const client = await this.beginTransaction(isolationLevel);
-        const result = await callback(client);
+        await this.beginTransaction(isolationLevel);
+        const result = await callback();
         await this.commitTransaction();
         if (attempt > 0) {
           getLogger().info('Completed transaction', {
@@ -274,7 +274,7 @@ export class RepositoryConnection implements Disposable {
     throw error;
   }
 
-  private async beginTransaction(isolationLevel: TransactionIsolationLevel): Promise<PoolClient> {
+  private async beginTransaction(isolationLevel: TransactionIsolationLevel): Promise<void> {
     this.assertNotClosed();
     const nextDepth = this.transactionDepth + 1;
     const conn = await this.getConnection(DatabaseMode.WRITER);
@@ -299,7 +299,6 @@ export class RepositoryConnection implements Disposable {
     this.transactionDepth = nextDepth;
     this.pushCallbackFrame();
     this.accessTracker.pushTransactionFrame();
-    return conn;
   }
 
   private async commitTransaction(): Promise<void> {
@@ -430,10 +429,9 @@ export class RepositoryConnection implements Disposable {
     }
   }
 
-  async ensureInTransaction<TResult>(callback: (client: PoolClient) => Promise<TResult>): Promise<TResult> {
+  async ensureInTransaction<TResult>(callback: () => Promise<TResult>): Promise<TResult> {
     if (this.transactionDepth) {
-      const client = await this.getConnection(DatabaseMode.WRITER);
-      return callback(client);
+      return callback();
     } else {
       return this.withTransaction(callback);
     }

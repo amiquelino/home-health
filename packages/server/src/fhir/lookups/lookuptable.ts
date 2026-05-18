@@ -81,7 +81,7 @@ export abstract class LookupTable {
    * @param create - True if the resource should be created (vs updated).
    * @returns Promise on completion.
    */
-  indexResource(client: PoolClient, resource: WithId<Resource>, create: boolean): Promise<void> {
+  indexResource(client: Pool | PoolClient, resource: WithId<Resource>, create: boolean): Promise<void> {
     return this.batchIndexResources(client, [resource], create);
   }
 

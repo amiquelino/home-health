@@ -33,6 +33,7 @@ import type {
   UserConfiguration,
 } from '@medplum/fhirtypes';
 import { randomBytes, randomUUID } from 'crypto';
+import assert from 'node:assert';
 import type { PoolClient } from 'pg';
 import { initAppServices, shutdownApp } from '../app';
 import { getConfig, loadTestConfig } from '../config/loader';
@@ -1567,7 +1568,8 @@ describe('FHIR Repo', () => {
     let releaseSpy: jest.SpyInstance | undefined;
 
     await expect(
-      repo.withTransaction(async (client) => {
+      repo.withTransaction(async () => {
+        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
         querySpy = jest.spyOn(client, 'query').mockImplementation(() => {
           // Simulates a session killed by idle_in_transaction_session_timeout: every query
           // issued on the client — including the ROLLBACK the error handler sends — rejects.
@@ -1576,6 +1578,7 @@ describe('FHIR Repo', () => {
           });
           throw terminationErr;
         });
+        assert('release' in client); // discern PoolClient from Pool | PoolClient
         releaseSpy = jest.spyOn(client, 'release');
         await client.query('SELECT 1');
       })
@@ -1614,11 +1617,14 @@ describe('FHIR Repo', () => {
     const { repo } = await createTestProject({ withRepo: true });
     let releaseSpy: jest.SpyInstance | undefined;
 
-    await repo.withStatementTimeout({ timeoutMs: 0 }, async (client) => {
-      releaseSpy = jest.spyOn(client, 'release');
+    await repo.withStatementTimeout({ timeoutMs: 0 }, async () => {
+      const outerClient = repo.getDatabaseClient(DatabaseMode.WRITER);
+      assert('release' in outerClient); // discern PoolClient from Pool | PoolClient
+      releaseSpy = jest.spyOn(outerClient, 'release');
 
-      await repo.withTransaction(async (txClient) => {
-        expect(txClient).toBe(client);
+      await repo.withTransaction(async () => {
+        const innerClient = repo.getDatabaseClient(DatabaseMode.WRITER);
+        expect(innerClient).toBe(outerClient);
       });
 
       expect(releaseSpy).not.toHaveBeenCalled();
@@ -1835,7 +1841,8 @@ describe('FHIR Repo', () => {
         patient.link?.push({ type: 'seealso', other: { reference: 'Patient/' + randomUUID() } });
       }
 
-      await repo.withTransaction(async (client) => {
+      await repo.withTransaction(async () => {
+        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
         const querySpy = jest.spyOn(client, 'query');
         await repo.createResource(patient);
         const calls = querySpy.mock.calls;
@@ -2022,7 +2029,8 @@ describe('FHIR Repo', () => {
       const { repo } = await createTestProject({ withRepo: true });
 
       let checked = false;
-      await repo.withTransaction(async (client) => {
+      await repo.withTransaction(async () => {
+        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
         // starting a transaction will have pinned a connection to `repo`.
         // so ensure that cloning after that pinning does not propagate the pinned connection
         // to the cloned repository.

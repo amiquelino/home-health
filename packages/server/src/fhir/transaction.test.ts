@@ -7,6 +7,7 @@ import assert from 'node:assert';
 import { randomUUID } from 'node:crypto';
 import { initAppServices, shutdownApp } from '../app';
 import { loadTestConfig } from '../config/loader';
+import { DatabaseMode } from '../database';
 import { createTestProject, withTestContext } from '../test.setup';
 import type { Repository, SystemRepository } from './repo';
 import { PostgresError } from './sql';
@@ -260,7 +261,7 @@ describe('FHIR Repo Transactions', () => {
 
         // Start an inner transaction - this will be rolled back
         await expect(
-          repo.withTransaction(async (db) => {
+          repo.withTransaction(async () => {
             patient2 = await repo.createResource<Patient>({ resourceType: 'Patient' });
             expect(patient2).toBeDefined();
 
@@ -292,7 +293,14 @@ describe('FHIR Repo Transactions', () => {
             expect(searchPreCheck).toBeDefined();
             expect(searchPreCheck.entry).toHaveLength(1);
 
-            await expect(db.query(`SELECT * FROM "TableDoesNotExist"`)).rejects.toMatchObject({
+            await expect(
+              repo.executeRawSql(`SELECT * FROM "TableDoesNotExist"`, [], {
+                mode: DatabaseMode.READER,
+                operation: 'read',
+                resourceTypes: [],
+                source: 'Nested transaction rollback from DB error test',
+              })
+            ).rejects.toMatchObject({
               message: 'relation "TableDoesNotExist" does not exist',
             });
           })
@@ -416,7 +424,8 @@ describe('FHIR Repo Transactions', () => {
     withTestContext(async () => {
       let queries: string[] = [];
 
-      await repo.withTransaction(async (client) => {
+      await repo.withTransaction(async () => {
+        const client = repo.getDatabaseClient(DatabaseMode.WRITER);
         const querySpy = jest.spyOn(client, 'query');
         try {
           await repo.getSystemRepo().withTransaction(async () => undefined);

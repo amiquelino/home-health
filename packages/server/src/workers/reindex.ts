@@ -17,7 +17,7 @@ import { getConfig } from '../config/loader';
 import { tryGetRequestContext, tryRunInRequestContext } from '../context';
 import { DatabaseMode, getDatabasePool, getDefaultStatementTimeout } from '../database';
 import { AsyncJobExecutor } from '../fhir/operations/utils/asyncjobexecutor';
-import type { SystemRepository } from '../fhir/repo';
+import type { ExecuteSqlOptions, SystemRepository } from '../fhir/repo';
 import { getShardSystemRepo } from '../fhir/repo';
 import { minCursorBasedSearchPageSize } from '../fhir/search';
 import { PLACEHOLDER_SHARD_ID } from '../fhir/sharding';
@@ -294,6 +294,13 @@ export class ReindexJob {
     throw new Error('maxIterationAttempts must be at least 1');
   }
 
+  private readonly processIterationQueryOptions: ExecuteSqlOptions = {
+    mode: DatabaseMode.WRITER,
+    operation: 'write',
+    resourceTypes: [],
+    source: 'reindex.processIteration',
+  };
+
   /**
    * Reindex one page of resources in the database, determined by the job data and search filter.
    * @param systemRepo - The system repository to use for database operations.
@@ -310,7 +317,7 @@ export class ReindexJob {
     let cursor = '';
     let nextTimestamp = new Date(0).toISOString();
     try {
-      await systemRepo.withTransaction(async (conn) => {
+      await systemRepo.withTransaction(async () => {
         /*
         When a ReindexJob needs to scan a very large table for resources to reindex,
         but most/all have already been reindexed, the search will scan the most/all of table
@@ -330,13 +337,21 @@ export class ReindexJob {
         */
         let bundle: Bundle<WithId<Resource>>;
         try {
-          await conn.query(`SELECT set_config('statement_timeout', $1, true)`, [String(searchStatementTimeout)]);
+          await systemRepo.executeRawSql(
+            `SELECT set_config('statement_timeout', $1, true)`,
+            [String(searchStatementTimeout)],
+            this.processIterationQueryOptions
+          );
           bundle = await systemRepo.search(searchRequest, { maxResourceVersion });
         } finally {
           if (upsertStatementTimeout === 'DEFAULT') {
-            await conn.query(`RESET statement_timeout`);
+            await systemRepo.executeRawSql(`RESET statement_timeout`, [], this.processIterationQueryOptions);
           } else {
-            await conn.query(`SELECT set_config('statement_timeout', $1, true)`, [String(upsertStatementTimeout)]);
+            await systemRepo.executeRawSql(
+              `SELECT set_config('statement_timeout', $1, true)`,
+              [String(upsertStatementTimeout)],
+              this.processIterationQueryOptions
+            );
           }
         }
         if (bundle.entry?.length) {

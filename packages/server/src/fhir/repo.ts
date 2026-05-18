@@ -261,7 +261,7 @@ function addSyntheticR4ProjectIfMissing(context: RepositoryContext): void {
  * It is a thin layer on top of the database.
  * Repository instances should be created per author and project.
  */
-export class Repository extends FhirRepository<PoolClient> implements Disposable {
+export class Repository extends FhirRepository implements Disposable {
   private readonly context: RepositoryContext;
   private readonly connection: RepositoryConnection;
   private readonly ownsConnection: boolean;
@@ -350,6 +350,18 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
     this.assertNotClosed();
     this.connection.recordResourceAccess('sql', options.operation, options.resourceTypes, options.source);
     return query.execute(this.getDatabaseClient(options.mode));
+  }
+
+  async executeRawSql<T = any>(query: string, params: any[], options: ExecuteSqlOptions): Promise<T[]> {
+    return this.executeSql(
+      {
+        execute: async (conn) => {
+          const result = await conn.query(query, params);
+          return result.rows;
+        },
+      },
+      options
+    );
   }
 
   private rateLimiter(): FhirRateLimiter | undefined {
@@ -1010,10 +1022,10 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
    * @param create - If true, then the resource is being created.
    */
   private async writeToDatabase<T extends WithId<Resource>>(resource: T, create: boolean): Promise<void> {
-    await this.ensureInTransaction(async (client) => {
+    await this.ensureInTransaction(async () => {
       await this.writeResource(resource);
       await this.writeResourceVersion(resource);
-      await this.writeLookupTables(client, resource, create);
+      await this.writeLookupTables(resource, create);
     });
   }
 
@@ -1205,7 +1217,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
       }
 
       if (!this.isCacheOnly(resource)) {
-        await this.ensureInTransaction(async (conn) => {
+        await this.ensureInTransaction(async () => {
           const columns = buildDeletedResourceRow(resourceType, id, resource.meta?.project);
 
           await this.executeSql(new InsertQuery(resourceType, [columns]).mergeOnConflict(), {
@@ -1232,7 +1244,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
             }
           );
 
-          await this.deleteFromLookupTables(conn, resource);
+          await this.deleteFromLookupTables(resource);
           const durationMs = Date.now() - startTime;
 
           await this.postCommit(async () => {
@@ -1326,7 +1338,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
 
     const projectId = this.isSuperAdmin() ? undefined : this.context.currentProject?.id;
     const deletedIds = await this.withTransaction<string[]>(
-      async (client) => {
+      async () => {
         const deleteQuery = new DeleteQuery(resourceType).where('id', 'IN', ids).returning('id');
         if (projectId) {
           deleteQuery.where('projectId', '=', projectId);
@@ -1345,7 +1357,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
         for (let i = 0; i < deleteResult.length; i++) {
           const res = deleteResult[i];
           deletedIds[i] = res.id;
-          await this.deleteFromLookupTables(client, { resourceType, id: res.id } as WithId<Resource>);
+          await this.deleteFromLookupTables({ resourceType, id: res.id } as WithId<Resource>);
         }
 
         await this.executeSql(new DeleteQuery(resourceType + '_History').where('id', 'IN', deletedIds), {
@@ -1738,11 +1750,11 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
 
   /**
    * Writes resources values to the lookup tables.
-   * @param client - The database client inside the transaction.
    * @param resource - The resource to index.
    * @param create - If true, then the resource is being created.
    */
-  private async writeLookupTables(client: PoolClient, resource: WithId<Resource>, create: boolean): Promise<void> {
+  private async writeLookupTables(resource: WithId<Resource>, create: boolean): Promise<void> {
+    const client = this.getDatabaseClient(DatabaseMode.WRITER);
     for (const lookupTable of lookupTables) {
       await lookupTable.indexResource(client, resource, create);
     }
@@ -1757,10 +1769,10 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
 
   /**
    * Deletes values from lookup tables.
-   * @param client - The database client inside the transaction.
    * @param resource - The resource to delete.
    */
-  private async deleteFromLookupTables(client: Pool | PoolClient, resource: WithId<Resource>): Promise<void> {
+  private async deleteFromLookupTables(resource: WithId<Resource>): Promise<void> {
+    const client = this.getDatabaseClient(DatabaseMode.WRITER);
     for (const lookupTable of lookupTables) {
       await lookupTable.deleteValuesForResource(client, resource);
     }
@@ -2186,7 +2198,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
   }
 
   async withTransaction<TResult>(
-    callback: (client: PoolClient) => Promise<TResult>,
+    callback: () => Promise<TResult>,
     options?: { serializable?: boolean }
   ): Promise<TResult> {
     this.assertNotClosed();
@@ -2195,7 +2207,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
 
   async withStatementTimeout<TResult>(
     options: StatementTimeoutOptions,
-    callback: (client: PoolClient) => Promise<TResult>
+    callback: () => Promise<TResult>
   ): Promise<TResult> {
     this.assertNotClosed();
     if (!this.ownsConnection) {
@@ -2302,7 +2314,7 @@ export class Repository extends FhirRepository<PoolClient> implements Disposable
     await deleteResourceCacheEntries(resourceType, ids);
   }
 
-  async ensureInTransaction<TResult>(callback: (client: PoolClient) => Promise<TResult>): Promise<TResult> {
+  async ensureInTransaction<TResult>(callback: () => Promise<TResult>): Promise<TResult> {
     this.assertNotClosed();
     return this.connection.ensureInTransaction(callback);
   }
