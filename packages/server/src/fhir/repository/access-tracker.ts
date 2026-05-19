@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: Apache-2.0
 
 import { isResourceType } from '@medplum/core';
+import type { TransactionOptions } from '@medplum/fhir-router';
 import type { Reference, ResourceType } from '@medplum/fhirtypes';
 import type { DatabaseMode } from '../../database';
 import { getLogger } from '../../logger';
@@ -19,9 +20,7 @@ export interface ExecuteSqlOptions extends RepositoryAccessOptions {
   readonly mode: DatabaseMode;
 }
 
-export interface TransactionSqlOptions extends RepositoryAccessOptions {
-  readonly serializable?: boolean;
-}
+export interface TransactionSqlOptions extends RepositoryAccessOptions, TransactionOptions {}
 
 type TransactionAccessFrame = {
   sqlReadCount: number;

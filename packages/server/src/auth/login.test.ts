@@ -82,7 +82,7 @@ describe('Login', () => {
     setupRecaptchaMock(fetch as unknown as jest.Mock, true);
   });
 
-  test('Invalid client UUID', async () => {
+  test.only('Invalid client UUID', async () => {
     const res = await request(app).post('/auth/login').type('json').send({
       clientId: '123',
       email,

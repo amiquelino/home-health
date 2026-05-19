@@ -11,6 +11,7 @@ import {
   deepClone,
   evalFhirPath,
   generateId,
+  getSearchResourceTypes,
   globalSchema,
   matchesSearchRequest,
   multipleMatches,
@@ -19,7 +20,7 @@ import {
   preconditionFailed,
   stringify,
 } from '@medplum/core';
-import type { Bundle, OperationOutcome, Reference, Resource } from '@medplum/fhirtypes';
+import type { Bundle, OperationOutcome, Reference, Resource, ResourceType } from '@medplum/fhirtypes';
 import type { Operation } from 'rfc6902';
 import { applyPatch } from 'rfc6902';
 
@@ -35,6 +36,11 @@ export type ReadHistoryOptions = {
   offset?: number;
   limit?: number;
 };
+
+export interface TransactionOptions {
+  readonly resourceTypes: Iterable<ResourceType>;
+  readonly serializable?: boolean;
+}
 
 export const RepositoryMode = {
   READER: 'reader',
@@ -197,10 +203,7 @@ export abstract class FhirRepository {
    *
    * @param callback - The callback function to be run within a transaction.
    */
-  abstract withTransaction<TResult>(
-    callback: () => Promise<TResult>,
-    options?: { serializable?: boolean }
-  ): Promise<TResult>;
+  abstract withTransaction<TResult>(callback: () => Promise<TResult>, options: TransactionOptions): Promise<TResult>;
 
   /**
    * Searches for a single FHIR resource.
@@ -281,7 +284,10 @@ export abstract class FhirRepository {
         const createdResource = await this.createResource(resource, options);
         return { resource: createdResource, outcome: created };
       },
-      { serializable: true } // Requires strong transactional guarantees to ensure unique resource creation
+      {
+        resourceTypes: getSearchResourceTypes(search),
+        serializable: true,
+      } // Requires strong transactional guarantees to ensure unique resource creation
     );
   }
 
@@ -341,7 +347,7 @@ export abstract class FhirRepository {
         const updated = await this.updateResource({ ...resource, id: existing.id }, options);
         return { resource: updated, outcome: allOk };
       },
-      { serializable: true }
+      { serializable: true, resourceTypes: getSearchResourceTypes(search) }
     );
   }
 
@@ -375,7 +381,7 @@ export abstract class FhirRepository {
         const resource = matches[0];
         await this.deleteResource(resource.resourceType, resource.id);
       },
-      { serializable: true }
+      { serializable: true, resourceTypes: getSearchResourceTypes(search) }
     );
   }
 
@@ -396,7 +402,7 @@ export abstract class FhirRepository {
         const resource = matches[0];
         return this.patchResource(resource.resourceType, resource.id, patch);
       },
-      { serializable: true }
+      { serializable: true, resourceTypes: getSearchResourceTypes(search) }
     );
   }
 }
