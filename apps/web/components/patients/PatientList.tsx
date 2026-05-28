@@ -27,7 +27,7 @@ export function PatientList({ initial }: { initial: HHPatient[] }) {
     return () => clearTimeout(t);
   }, [q, search]);
 
-  function handleCreated(patient: HHPatient) {
+  function handleSaved(patient: HHPatient) {
     setPatients(prev => [patient, ...prev]);
   }
 
@@ -107,7 +107,7 @@ export function PatientList({ initial }: { initial: HHPatient[] }) {
       {showModal && (
         <PatientModal
           onClose={() => setShowModal(false)}
-          onCreated={handleCreated}
+          onSaved={handleSaved}
         />
       )}
     </>
