@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, Fragment } from 'react';
 import type { HHAppointment } from '@hh/core';
 import { formatTime } from '@hh/core';
 import { AppointmentModal } from './AppointmentModal';
@@ -128,8 +128,8 @@ export function WeekCalendar() {
 
           {/* Time rows */}
           {HOURS.map(hour => (
-            <>
-              <div key={`h-${hour}`} className="border-b border-slate-100 py-1 pr-2 text-right">
+            <Fragment key={hour}>
+              <div className="border-b border-slate-100 py-1 pr-2 text-right">
                 <span className="text-xs text-slate-400">{hour}:00</span>
               </div>
               {weekDays.map((day, dayIdx) => {
@@ -154,7 +154,7 @@ export function WeekCalendar() {
                   </div>
                 );
               })}
-            </>
+            </Fragment>
           ))}
         </div>
       </div>
