@@ -1,6 +1,6 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { loginWithMedplum } from '@/lib/medplum-auth';
+import { verifyUser } from '@/lib/users';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   providers: [
@@ -11,46 +11,28 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
-
-        const result = await loginWithMedplum(
-          credentials.email as string,
-          credentials.password as string
-        );
-
-        if (!result) return null;
-
-        return {
-          id: result.practitionerId,
-          name: result.name,
-          email: result.email,
-          practitionerId: result.practitionerId,
-          projectId: result.projectId,
-        };
+        return verifyUser(credentials.email as string, credentials.password as string);
       },
     }),
   ],
 
   callbacks: {
     jwt({ token, user }) {
-      // On first sign-in, copy custom fields into the JWT
       if (user) {
         token.practitionerId = (user as any).practitionerId;
         token.projectId = (user as any).projectId;
+        token.role = (user as any).role;
       }
       return token;
     },
     session({ session, token }) {
-      // Expose custom fields to the client session
       (session.user as any).practitionerId = token.practitionerId;
       (session.user as any).projectId = token.projectId;
+      (session.user as any).role = token.role;
       return session;
     },
   },
 
-  pages: {
-    signIn: '/login',
-    error: '/login',
-  },
-
+  pages: { signIn: '/login', error: '/login' },
   session: { strategy: 'jwt' },
 });
