@@ -9,9 +9,9 @@ export const authConfig: NextAuthConfig = {
     jwt({ token, user }) {
       if (user) {
         const u = user as { practitionerId?: string; projectId?: string; role?: string };
-        token.practitionerId = u.practitionerId;
-        token.projectId = u.projectId;
-        token.role = u.role;
+        token.practitionerId = u.practitionerId ?? '';
+        token.projectId = u.projectId ?? '';
+        token.role = u.role ?? '';
       }
       return token;
     },
