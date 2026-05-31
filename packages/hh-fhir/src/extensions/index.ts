@@ -23,6 +23,10 @@ export const HH_EXT = {
   SOAP_A: `${BASE}/soap-a`,
   SOAP_P: `${BASE}/soap-p`,
 
+  // Payment provider (per practitioner/clinic)
+  PAYMENT_PROVIDER_TYPE: `${BASE}/payment-provider-type`,
+  PAYMENT_PROVIDER_KEY: `${BASE}/payment-provider-key`,
+
   // Tenant / SaaS
   PROJECT_ID: `${BASE}/project-id`,
   SUBSCRIPTION_PLAN: `${BASE}/subscription-plan`,
