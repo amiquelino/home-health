@@ -19,6 +19,7 @@ interface Summary {
   appointmentsCount: number;
   averageTicket: number;
   charges: Charge[];
+  pendingCharges: Charge[];
 }
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
@@ -35,6 +36,21 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
 
 function formatBRL(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+function ChargeRow({ charge }: { charge: Charge }) {
+  return (
+    <div className="flex items-center gap-4 px-5 py-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-medium text-slate-900 truncate">{charge.patientName}</p>
+        <p className="text-xs text-slate-500">{formatDate(charge.start.slice(0, 10))}</p>
+      </div>
+      <span className="text-sm font-semibold text-slate-900">{formatBRL(charge.price)}</span>
+      <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${PAYMENT_COLORS[charge.paymentStatus]}`}>
+        {PAYMENT_LABELS[charge.paymentStatus]}
+      </span>
+    </div>
+  );
 }
 
 export default function BillingPage() {
@@ -70,9 +86,9 @@ export default function BillingPage() {
     .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 
   return (
-    <div>
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">Financeiro</h1>
         <div className="flex items-center gap-2">
           <button onClick={prevMonth} className="p-1.5 rounded-lg hover:bg-slate-200 text-slate-600">‹</button>
@@ -82,45 +98,57 @@ export default function BillingPage() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
         {[
           { label: 'Receita recebida', value: summary ? formatBRL(summary.revenue) : '—' },
-          { label: 'A receber', value: summary ? formatBRL(summary.pending) : '—' },
+          { label: 'A receber (total)', value: summary ? formatBRL(summary.pending) : '—', highlight: (summary?.pending ?? 0) > 0 },
           { label: 'Consultas', value: summary ? String(summary.appointmentsCount) : '—' },
           { label: 'Ticket médio', value: summary ? formatBRL(summary.averageTicket) : '—' },
         ].map(card => (
-          <div key={card.label} className="bg-white rounded-xl border border-slate-200 p-4">
+          <div key={card.label} className={`bg-white rounded-xl border p-4 ${card.highlight ? 'border-yellow-300' : 'border-slate-200'}`}>
             <p className="text-xs text-slate-500 mb-1">{card.label}</p>
-            <p className="text-xl font-bold text-slate-900">{loading ? '...' : card.value}</p>
+            <p className={`text-xl font-bold ${card.highlight ? 'text-yellow-700' : 'text-slate-900'}`}>
+              {loading ? '...' : card.value}
+            </p>
           </div>
         ))}
       </div>
 
-      {/* Charges list */}
+      {/* Pending charges — all time */}
+      {!loading && (summary?.pendingCharges.length ?? 0) > 0 && (
+        <div className="bg-white rounded-xl border border-yellow-200">
+          <div className="px-5 py-3 border-b border-yellow-100 flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-yellow-800">Pendentes de recebimento</h2>
+            <span className="text-xs font-medium text-yellow-700 bg-yellow-100 px-2 py-0.5 rounded-full">
+              {summary!.pendingCharges.length} {summary!.pendingCharges.length === 1 ? 'cobrança' : 'cobranças'}
+            </span>
+          </div>
+          <div className="divide-y divide-slate-100">
+            {summary!.pendingCharges.map(charge => (
+              <ChargeRow key={charge.id} charge={charge} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Month charges */}
       <div className="bg-white rounded-xl border border-slate-200">
         <div className="px-5 py-3 border-b border-slate-100">
-          <h2 className="text-sm font-semibold text-slate-700">Cobranças</h2>
+          <h2 className="text-sm font-semibold text-slate-700">
+            Cobranças — <span className="capitalize">{monthLabel}</span>
+          </h2>
         </div>
 
         {loading ? (
           <div className="p-12 text-center text-slate-400 text-sm">Carregando...</div>
         ) : !summary?.charges.length ? (
           <div className="p-12 text-center text-slate-400 text-sm">
-            Nenhuma cobrança este mês. Defina o valor nas consultas para registrar.
+            Nenhuma cobrança neste mês. Defina o valor nas consultas para registrar.
           </div>
         ) : (
           <div className="divide-y divide-slate-100">
             {summary.charges.map(charge => (
-              <div key={charge.id} className="flex items-center gap-4 px-5 py-3">
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 truncate">{charge.patientName}</p>
-                  <p className="text-xs text-slate-500">{formatDate(charge.start.slice(0, 10))}</p>
-                </div>
-                <span className="text-sm font-semibold text-slate-900">{formatBRL(charge.price)}</span>
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${PAYMENT_COLORS[charge.paymentStatus]}`}>
-                  {PAYMENT_LABELS[charge.paymentStatus]}
-                </span>
-              </div>
+              <ChargeRow key={charge.id} charge={charge} />
             ))}
           </div>
         )}
