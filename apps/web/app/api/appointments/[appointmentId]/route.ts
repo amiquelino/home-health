@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirGet, fhirUpdate } from '@/lib/medplum-client';
-import { fromFHIRAppointment } from '@hh/fhir';
-import { HH_EXT, setExtension } from '@hh/fhir';
+import { fromFHIRAppointment, setExtension } from '@hh/fhir';
 import type { Appointment } from '@medplum/fhirtypes';
 
 export const PATCH = withAuth(async (
