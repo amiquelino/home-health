@@ -5,6 +5,16 @@ import { toFHIRPatient, fromFHIRPatient } from '@hh/fhir';
 import { isValidCPF } from '@hh/core';
 import type { Patient } from '@medplum/fhirtypes';
 
+export const GET = withAuth(async (
+  _req: NextRequest,
+  session,
+  context,
+) => {
+  const { patientId } = await context!.params;
+  const fhir = await fhirGet<Patient>('Patient', patientId, session.user.projectId);
+  return NextResponse.json(fromFHIRPatient(fhir));
+});
+
 export const PUT = withAuth(async (
   req: NextRequest,
   session,
