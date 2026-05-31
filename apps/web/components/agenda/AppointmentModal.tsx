@@ -37,6 +37,10 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [pixResult, setPixResult] = useState<{ pixCopiaECola: string; invoiceUrl: string } | null>(null);
+  const [providerConfigured, setProviderConfigured] = useState(false);
+  const [priceDisplay, setPriceDisplay] = useState(
+    appointment?.price ? formatBRL(appointment.price) : ''
+  );
 
   const initDate = appointment
     ? appointment.start.slice(0, 10)
@@ -61,6 +65,14 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
   function set(field: string, value: string | number | boolean) {
     setForm(f => ({ ...f, [field]: value }));
   }
+
+  useEffect(() => {
+    if (!isEdit) return;
+    fetch('/api/settings/payment')
+      .then(r => r.json())
+      .then(d => setProviderConfigured(d.configured === true))
+      .catch(() => {});
+  }, [isEdit]);
 
   useEffect(() => {
     if (isEdit) return;
@@ -310,12 +322,17 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="0,00"
-                    value={form.price}
-                    onChange={e => set('price', e.target.value)}
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="R$ 0,00"
+                    value={priceDisplay}
+                    onChange={e => {
+                      const digits = e.target.value.replace(/\D/g, '');
+                      const cents = parseInt(digits || '0', 10);
+                      const brl = cents / 100;
+                      setPriceDisplay(cents === 0 ? '' : formatBRL(brl));
+                      set('price', cents === 0 ? '' : brl);
+                    }}
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
                   />
                 </div>
@@ -334,7 +351,7 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
               </div>
 
               {/* PIX button */}
-              {form.price && parseFloat(String(form.price)) > 0 && form.paymentStatus === 'pending' && (
+              {providerConfigured && form.price && parseFloat(String(form.price)) > 0 && form.paymentStatus === 'pending' && (
                 <button
                   type="button"
                   onClick={generatePix}
