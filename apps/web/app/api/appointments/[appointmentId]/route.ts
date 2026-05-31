@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirGet, fhirUpdate } from '@/lib/medplum-client';
 import { fromFHIRAppointment } from '@hh/fhir';
+import { HH_EXT, setExtension } from '@hh/fhir';
 import type { Appointment } from '@medplum/fhirtypes';
 
 export const PATCH = withAuth(async (
@@ -22,6 +23,13 @@ export const PATCH = withAuth(async (
     ...(body.end && { end: body.end }),
     ...(body.notes !== undefined && { comment: body.notes }),
   };
+
+  if (body.price !== undefined || body.paymentStatus !== undefined) {
+    const exts = [...(updated.extension ?? [])];
+    if (body.price !== undefined) setExtension(exts, 'CHARGE_AMOUNT', String(body.price));
+    if (body.paymentStatus !== undefined) setExtension(exts, 'PAYMENT_STATUS', body.paymentStatus);
+    updated.extension = exts;
+  }
 
   const result = await fhirUpdate<Appointment>('Appointment', appointmentId, updated, projectId);
   return NextResponse.json(fromFHIRAppointment(result));

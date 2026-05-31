@@ -22,6 +22,8 @@ export function toFHIRAppointment(appt: HHAppointment): Appointment {
   const ext: Appointment['extension'] = [];
   if (appt.isHomeVisit) ext.push({ url: HH_EXT.HOME_VISIT, valueString: 'true' });
   if (appt.homeVisitAddress) ext.push({ url: HH_EXT.HOME_VISIT_ADDRESS, valueString: appt.homeVisitAddress });
+  if (appt.price !== undefined) ext.push({ url: HH_EXT.CHARGE_AMOUNT, valueString: String(appt.price) });
+  if (appt.paymentStatus) ext.push({ url: HH_EXT.PAYMENT_STATUS, valueString: appt.paymentStatus });
 
   return {
     resourceType: 'Appointment',
@@ -60,5 +62,9 @@ export function fromFHIRAppointment(fhir: Appointment): HHAppointment {
     notes: fhir.comment,
     isHomeVisit: getExtension(fhir as any, 'HOME_VISIT') === 'true',
     homeVisitAddress: getExtension(fhir as any, 'HOME_VISIT_ADDRESS'),
+    price: getExtension(fhir as any, 'CHARGE_AMOUNT') !== undefined
+      ? parseFloat(getExtension(fhir as any, 'CHARGE_AMOUNT')!)
+      : undefined,
+    paymentStatus: getExtension(fhir as any, 'PAYMENT_STATUS') as import('@hh/core').PaymentStatus | undefined,
   };
 }
