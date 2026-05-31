@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirGet, fhirUpdate } from '@/lib/medplum-client';
-import { HH_EXT, getExtension, setExtension } from '@hh/fhir';
+import { getExtension, setExtension } from '@hh/fhir';
 import type { ProviderType } from '@hh/billing';
 import type { Practitioner } from '@medplum/fhirtypes';
 
