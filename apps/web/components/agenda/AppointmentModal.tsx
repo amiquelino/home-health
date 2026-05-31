@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import type { HHAppointment, HHPatient } from '@hh/core';
+import type { HHAppointment, HHPatient, PaymentStatus } from '@hh/core';
 
 interface Props {
   initial?: { date: string; time: string };
@@ -18,6 +18,16 @@ const DURATIONS = [
   { label: '2h', minutes: 120 },
 ];
 
+const PAYMENT_STATUS_LABELS: Record<PaymentStatus, string> = {
+  pending: 'Pendente',
+  paid: 'Pago',
+  cancelled: 'Cancelado',
+};
+
+function formatBRL(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 export function AppointmentModal({ initial, appointment, onClose, onSaved }: Props) {
   const isEdit = !!appointment;
   const [loading, setLoading] = useState(false);
@@ -25,6 +35,8 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
   const [patients, setPatients] = useState<HHPatient[]>([]);
   const [patientQuery, setPatientQuery] = useState('');
   const [whatsappLoading, setWhatsappLoading] = useState(false);
+  const [pixLoading, setPixLoading] = useState(false);
+  const [pixResult, setPixResult] = useState<{ pixCopiaECola: string; invoiceUrl: string } | null>(null);
 
   const initDate = appointment
     ? appointment.start.slice(0, 10)
@@ -42,13 +54,14 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
     notes: appointment?.notes ?? '',
     isHomeVisit: appointment?.isHomeVisit ?? false,
     homeVisitAddress: appointment?.homeVisitAddress ?? '',
+    price: appointment?.price ?? '',
+    paymentStatus: appointment?.paymentStatus ?? 'pending' as PaymentStatus,
   });
 
   function set(field: string, value: string | number | boolean) {
     setForm(f => ({ ...f, [field]: value }));
   }
 
-  // Patient search
   useEffect(() => {
     if (isEdit) return;
     const t = setTimeout(async () => {
@@ -69,23 +82,29 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
       endDate.setMinutes(endDate.getMinutes() + form.durationMinutes);
       const end = endDate.toISOString().slice(0, 19);
 
-      const url = isEdit
-        ? `/api/appointments/${appointment!.id}`
-        : '/api/appointments';
+      const url = isEdit ? `/api/appointments/${appointment!.id}` : '/api/appointments';
       const method = isEdit ? 'PATCH' : 'POST';
+
+      const body: Record<string, unknown> = {
+        patientId: form.patientId,
+        patientName: form.patientName,
+        start,
+        end,
+        notes: form.notes,
+        isHomeVisit: form.isHomeVisit,
+        homeVisitAddress: form.homeVisitAddress,
+      };
+
+      if (isEdit) {
+        const priceNum = form.price !== '' ? parseFloat(String(form.price)) : undefined;
+        if (priceNum !== undefined && !isNaN(priceNum)) body.price = priceNum;
+        body.paymentStatus = form.paymentStatus;
+      }
 
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          patientId: form.patientId,
-          patientName: form.patientName,
-          start,
-          end,
-          notes: form.notes,
-          isHomeVisit: form.isHomeVisit,
-          homeVisitAddress: form.homeVisitAddress,
-        }),
+        body: JSON.stringify(body),
       });
 
       const data = await res.json();
@@ -115,6 +134,37 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
       window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank');
     } finally {
       setWhatsappLoading(false);
+    }
+  }
+
+  async function generatePix() {
+    if (!appointment) return;
+    setPixLoading(true);
+    setError('');
+    try {
+      const priceNum = parseFloat(String(form.price));
+      if (isNaN(priceNum) || priceNum <= 0) {
+        setError('Informe o valor da consulta antes de gerar o PIX');
+        return;
+      }
+      const dueDate = new Date();
+      dueDate.setDate(dueDate.getDate() + 3);
+      const res = await fetch('/api/billing/pix', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          appointmentId: appointment.id,
+          patientId: appointment.patientId,
+          amount: priceNum,
+          description: `Consulta — ${appointment.patientName}`,
+          dueDate: dueDate.toISOString().slice(0, 10),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setError(data.error ?? 'Erro ao gerar PIX'); return; }
+      setPixResult({ pixCopiaECola: data.pixCopiaECola, invoiceUrl: data.invoiceUrl });
+    } finally {
+      setPixLoading(false);
     }
   }
 
@@ -251,6 +301,89 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none" />
           </div>
 
+          {/* Billing section (edit only) */}
+          {isEdit && appointment.status !== 'cancelled' && (
+            <div className="border-t border-slate-100 pt-4 space-y-3">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wide">Cobrança</p>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Valor (R$)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={form.price}
+                    onChange={e => set('price', e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Status</label>
+                  <select
+                    value={form.paymentStatus}
+                    onChange={e => set('paymentStatus', e.target.value)}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  >
+                    {(Object.entries(PAYMENT_STATUS_LABELS) as [PaymentStatus, string][]).map(([v, l]) => (
+                      <option key={v} value={v}>{l}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* PIX button */}
+              {form.price && parseFloat(String(form.price)) > 0 && form.paymentStatus === 'pending' && (
+                <button
+                  type="button"
+                  onClick={generatePix}
+                  disabled={pixLoading}
+                  className="w-full flex items-center justify-center gap-2 border border-sky-500 text-sky-700 hover:bg-sky-50 disabled:opacity-60 text-sm font-medium py-2 rounded-lg transition-colors"
+                >
+                  {pixLoading ? 'Gerando PIX...' : `Gerar PIX ${form.price ? formatBRL(parseFloat(String(form.price))) : ''}`}
+                </button>
+              )}
+
+              {/* PIX result */}
+              {pixResult && (
+                <div className="rounded-lg bg-sky-50 border border-sky-200 p-3 space-y-2">
+                  <p className="text-xs font-semibold text-sky-700">PIX gerado!</p>
+                  {pixResult.pixCopiaECola && (
+                    <div>
+                      <p className="text-xs text-slate-500 mb-1">Copia e cola:</p>
+                      <div className="flex gap-2">
+                        <input
+                          readOnly
+                          value={pixResult.pixCopiaECola}
+                          className="flex-1 text-xs bg-white border border-slate-200 rounded px-2 py-1 truncate"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => navigator.clipboard.writeText(pixResult.pixCopiaECola)}
+                          className="text-xs text-sky-600 font-medium px-2 hover:underline shrink-0"
+                        >
+                          Copiar
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                  {pixResult.invoiceUrl && (
+                    <a
+                      href={pixResult.invoiceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-xs text-sky-600 hover:underline"
+                    >
+                      Ver boleto/fatura →
+                    </a>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* WhatsApp reminder */}
           {isEdit && appointment.status !== 'cancelled' && (
             <button
               type="button"

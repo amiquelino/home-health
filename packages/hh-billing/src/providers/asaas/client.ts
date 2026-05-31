@@ -36,6 +36,17 @@ export interface AsaasSubscription {
   value: number;
 }
 
+export interface AsaasCharge {
+  id: string;
+  customer: string;
+  status: string;
+  value: number;
+  dueDate: string;
+  invoiceUrl: string;
+  pixQrCodeUrl?: string;
+  pixCopiaECola?: string;
+}
+
 export const asaas = {
   createCustomer(data: { name: string; cpfCnpj: string; email: string }) {
     return request<AsaasCustomer>('/customers', {
@@ -66,5 +77,23 @@ export const asaas = {
 
   getSubscription(id: string) {
     return request<AsaasSubscription>(`/subscriptions/${id}`);
+  },
+
+  createCharge(data: {
+    customer: string;
+    value: number;
+    dueDate: string;
+    description: string;
+  }) {
+    return request<AsaasCharge>('/payments', {
+      method: 'POST',
+      body: JSON.stringify({ ...data, billingType: 'PIX' }),
+    });
+  },
+
+  getChargePixQrCode(chargeId: string) {
+    return request<{ encodedImage: string; payload: string; expirationDate: string }>(
+      `/payments/${chargeId}/pixQrCode`,
+    );
   },
 };

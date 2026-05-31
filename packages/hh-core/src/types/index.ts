@@ -39,6 +39,8 @@ export interface HHPractitioner {
   phone?: string;
 }
 
+export type PaymentStatus = 'pending' | 'paid' | 'cancelled';
+
 export interface HHAppointment {
   id: string;
   patientId: string;
@@ -51,6 +53,8 @@ export interface HHAppointment {
   notes?: string;
   isHomeVisit?: boolean;
   homeVisitAddress?: string;
+  price?: number;
+  paymentStatus?: PaymentStatus;
 }
 
 export interface HHClinic {

@@ -14,6 +14,8 @@ export const HH_EXT = {
   // Appointment
   HOME_VISIT: `${BASE}/home-visit`,
   HOME_VISIT_ADDRESS: `${BASE}/home-visit-address`,
+  CHARGE_AMOUNT: `${BASE}/charge-amount`,
+  PAYMENT_STATUS: `${BASE}/payment-status`,
 
   // SOAP note (on ClinicalImpression)
   SOAP_S: `${BASE}/soap-s`,
