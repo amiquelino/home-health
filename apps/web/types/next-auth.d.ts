@@ -6,6 +6,8 @@ declare module 'next-auth' {
     practitionerId: string;
     projectId: string;
     role: string;
+    createdAt: string;
+    subscriptionStatus: string;
   }
 
   interface Session {
@@ -16,6 +18,8 @@ declare module 'next-auth' {
       practitionerId: string;
       projectId: string;
       role: string;
+      createdAt: string;
+      subscriptionStatus: string;
     };
   }
 }
@@ -25,5 +29,7 @@ declare module 'next-auth/jwt' {
     practitionerId: string;
     projectId: string;
     role?: string;
+    createdAt?: string;
+    subscriptionStatus?: string;
   }
 }

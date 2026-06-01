@@ -40,6 +40,8 @@ export interface AppUser {
   practitionerId: string;
   projectId: string;
   role: string;
+  createdAt: string;
+  subscriptionStatus: string;
 }
 
 export async function verifyUser(email: string, password: string): Promise<AppUser | null> {
@@ -62,6 +64,11 @@ export async function verifyUser(email: string, password: string): Promise<AppUs
   const projectId = practitioner.extension?.find(e => e.url === HH_EXT.PROJECT_ID)?.valueString
     ?? process.env.MEDPLUM_PROJECT_ID!;
   const role = practitioner.extension?.find(e => e.url === ROLE_EXT)?.valueString ?? 'practitioner';
+  const createdAt = practitioner.extension?.find(e => e.url === HH_EXT.CREATED_AT)?.valueString
+    ?? practitioner.meta?.lastUpdated
+    ?? new Date().toISOString();
+  const subscriptionStatus = practitioner.extension?.find(e => e.url === HH_EXT.SUBSCRIPTION_STATUS)?.valueString
+    ?? 'trial';
 
   return {
     id: practitioner.id!,
@@ -70,6 +77,8 @@ export async function verifyUser(email: string, password: string): Promise<AppUs
     practitionerId: practitioner.id!,
     projectId,
     role,
+    createdAt,
+    subscriptionStatus,
   };
 }
 
@@ -90,9 +99,12 @@ export async function createUser(params: {
       { url: PASSWORD_HASH_EXT, valueString: passwordHash },
       { url: ROLE_EXT, valueString: role },
       { url: HH_EXT.PROJECT_ID, valueString: process.env.MEDPLUM_PROJECT_ID! },
+      { url: HH_EXT.CREATED_AT, valueString: new Date().toISOString() },
+      { url: HH_EXT.SUBSCRIPTION_STATUS, valueString: 'trial' },
     ],
   });
 
+  const now = new Date().toISOString();
   return {
     id: practitioner.id!,
     name: params.name,
@@ -100,5 +112,7 @@ export async function createUser(params: {
     practitionerId: practitioner.id!,
     projectId: process.env.MEDPLUM_PROJECT_ID!,
     role,
+    createdAt: now,
+    subscriptionStatus: 'trial',
   };
 }
