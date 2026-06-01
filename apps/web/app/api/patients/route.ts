@@ -7,7 +7,11 @@ import type { Patient } from '@medplum/fhirtypes';
 
 export const GET = withAuth(async (req: NextRequest, session) => {
   const q = req.nextUrl.searchParams.get('q') ?? '';
-  const params: Record<string, string | string[]> = { _sort: '-_lastUpdated', _count: '50' };
+  const params: Record<string, string | string[]> = {
+    _sort: '-_lastUpdated',
+    _count: '50',
+    'general-practitioner': `Practitioner/${session.user.practitionerId}`,
+  };
   if (q) params.name = q;
 
   const patients = await fhirSearch<Patient>('Patient', params, session.user.projectId);
@@ -22,7 +26,10 @@ export const POST = withAuth(async (req: NextRequest, session) => {
   if (!phone?.trim()) return NextResponse.json({ error: 'Telefone é obrigatório' }, { status: 400 });
   if (cpf && !isValidCPF(cpf)) return NextResponse.json({ error: 'CPF inválido' }, { status: 400 });
 
-  const fhirPatient = toFHIRPatient({ id: '', name, phone, cpf, email, birthDate, notes, createdAt: '' });
+  const fhirPatient = toFHIRPatient(
+    { id: '', name, phone, cpf, email, birthDate, notes, createdAt: '' },
+    session.user.practitionerId,
+  );
   const created = await fhirCreate<Patient>('Patient', fhirPatient, session.user.projectId);
   return NextResponse.json(fromFHIRPatient(created), { status: 201 });
 });
