@@ -2,31 +2,31 @@ import { redirect } from 'next/navigation';
 import { auth, signIn } from '@/auth';
 import { AuthError } from 'next-auth';
 
-async function loginAction(formData: FormData) {
-  'use server';
-  try {
-    await signIn('credentials', {
-      email: formData.get('email'),
-      password: formData.get('password'),
-      redirectTo: '/agenda',
-    });
-  } catch (err) {
-    if (err instanceof AuthError) {
-      redirect('/login?error=1');
-    }
-    throw err;
-  }
-}
-
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; registered?: string }>;
 }) {
   const session = await auth();
-  if (session) redirect('/agenda');
+  if (session) redirect('/schedule');
 
-  const { error } = await searchParams;
+  const { error, registered } = await searchParams;
+
+  async function loginAction(formData: FormData) {
+    'use server';
+    try {
+      await signIn('credentials', {
+        email: formData.get('email'),
+        password: formData.get('password'),
+        redirectTo: registered === '1' ? '/onboarding' : '/schedule',
+      });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        redirect(`/login?error=1${registered === '1' ? '&registered=1' : ''}`);
+      }
+      throw err;
+    }
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-slate-50">
@@ -36,6 +36,11 @@ export default async function LoginPage({
           <p className="text-slate-500 text-sm mt-1">Acesse sua conta</p>
         </div>
 
+        {registered === '1' && (
+          <div className="mb-4 rounded-lg bg-green-50 border border-green-200 px-3 py-2 text-sm text-green-700">
+            Conta criada! Entre para configurar seu perfil.
+          </div>
+        )}
         {error && (
           <div className="mb-4 rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
             E-mail ou senha incorretos.
@@ -76,7 +81,7 @@ export default async function LoginPage({
 
         <p className="mt-6 text-center text-sm text-slate-500">
           Não tem conta?{' '}
-          <a href="/cadastro" className="text-sky-600 font-medium hover:underline">
+          <a href="/signup" className="text-sky-600 font-medium hover:underline">
             Criar conta grátis
           </a>
         </p>

@@ -27,6 +27,11 @@ export const HH_EXT = {
   PAYMENT_PROVIDER_TYPE: `${BASE}/payment-provider-type`,
   PAYMENT_PROVIDER_KEY: `${BASE}/payment-provider-key`,
 
+  // Onboarding
+  ONBOARDED: `${BASE}/onboarded`,
+  SPECIALTY: `${BASE}/specialty`,
+  DEFAULT_PRICE: `${BASE}/default-price`,
+
   // Tenant / SaaS
   PROJECT_ID: `${BASE}/project-id`,
   SUBSCRIPTION_PLAN: `${BASE}/subscription-plan`,

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import type { ProviderType } from '@hh/billing';
 
 const PROVIDERS: { value: ProviderType; label: string; hint: string }[] = [
@@ -17,6 +18,8 @@ const PROVIDERS: { value: ProviderType; label: string; hint: string }[] = [
 ];
 
 export default function SettingsPage() {
+  const searchParams = useSearchParams();
+  const isSetup = searchParams.get('setup') === '1';
   const [type, setType] = useState<ProviderType>('asaas');
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -61,6 +64,12 @@ export default function SettingsPage() {
   return (
     <div className="max-w-xl">
       <h1 className="text-xl font-bold text-slate-900 mb-6">Configurações</h1>
+
+      {isSetup && (
+        <div className="mb-6 rounded-xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-700">
+          Quase lá! Configure seu provedor de pagamento para gerar cobranças PIX para os pacientes.
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <div className="flex items-center justify-between mb-4">
