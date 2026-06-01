@@ -17,7 +17,7 @@ export const GET = withAuth(async (req: NextRequest, session) => {
   // Month-specific appointments (for revenue stats)
   const monthRaw = await fhirSearch<Appointment>(
     'Appointment',
-    { date: [`ge${from}`, `le${to}`], _count: '500' },
+    { date: [`ge${from}`, `le${to}`], _count: '500', actor: `Practitioner/${session.user.practitionerId}` },
     session.user.projectId,
   );
   const monthAppts = monthRaw.map(fromFHIRAppointment).filter(a => a.status !== 'cancelled');
@@ -34,7 +34,7 @@ export const GET = withAuth(async (req: NextRequest, session) => {
   // All-time pending charges (regardless of month)
   const allRaw = await fhirSearch<Appointment>(
     'Appointment',
-    { _count: '1000' },
+    { _count: '1000', actor: `Practitioner/${session.user.practitionerId}` },
     session.user.projectId,
   );
   const allAppts = allRaw.map(fromFHIRAppointment).filter(a => a.status !== 'cancelled');

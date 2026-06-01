@@ -13,7 +13,11 @@ export const GET = withAuth(async (req: NextRequest, session) => {
   if (dateFrom) dateFilter.push(`ge${dateFrom}`);
   if (dateTo) dateFilter.push(`le${dateTo}`);
 
-  const params: Record<string, string | string[]> = { _sort: 'date', _count: '200' };
+  const params: Record<string, string | string[]> = {
+    _sort: 'date',
+    _count: '200',
+    actor: `Practitioner/${session.user.practitionerId}`,
+  };
   if (dateFilter.length) params['date'] = dateFilter;
 
   const appointments = await fhirSearch<Appointment>('Appointment', params, session.user.projectId);

@@ -10,7 +10,12 @@ export const GET = withAuth(async (req: NextRequest, session) => {
 
   const notes = await fhirSearch<ClinicalImpression>(
     'ClinicalImpression',
-    { subject: `Patient/${patientId}`, _sort: '-date', _count: '50' },
+    {
+      subject: `Patient/${patientId}`,
+      assessor: `Practitioner/${session.user.practitionerId}`,
+      _sort: '-date',
+      _count: '50',
+    },
     session.user.projectId,
   );
 
