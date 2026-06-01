@@ -6,7 +6,11 @@ import type { Patient } from '@medplum/fhirtypes';
 
 export default async function PacientesPage() {
   const session = await auth();
-  const patients = await fhirSearch<Patient>('Patient', { _sort: '-_lastUpdated', _count: '50' }, session?.user.projectId);
+  const patients = await fhirSearch<Patient>('Patient', {
+    _sort: '-_lastUpdated',
+    _count: '50',
+    'general-practitioner': `Practitioner/${session?.user.practitionerId}`,
+  }, session?.user.projectId);
   const initial = patients.map(fromFHIRPatient);
   return <PatientList initial={initial} />;
 }

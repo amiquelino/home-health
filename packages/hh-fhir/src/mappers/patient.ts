@@ -2,7 +2,7 @@ import type { Patient } from '@medplum/fhirtypes';
 import type { HHPatient } from '@hh/core';
 import { HH_EXT, getExtension } from '../extensions';
 
-export function toFHIRPatient(p: HHPatient): Patient {
+export function toFHIRPatient(p: HHPatient, practitionerId?: string): Patient {
   const ext: Patient['extension'] = [];
   if (p.cpf) ext.push({ url: HH_EXT.CPF, valueString: p.cpf });
 
@@ -17,6 +17,9 @@ export function toFHIRPatient(p: HHPatient): Patient {
     ...(p.birthDate && { birthDate: p.birthDate }),
     ...(p.notes && { text: { status: 'additional' as const, div: p.notes } }),
     ...(ext.length && { extension: ext }),
+    ...(practitionerId && {
+      generalPractitioner: [{ reference: `Practitioner/${practitionerId}` }],
+    }),
   };
 }
 
