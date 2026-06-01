@@ -142,7 +142,7 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
       const apptDate = new Date(appointment.start);
       const dateStr = apptDate.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
       const timeStr = apptDate.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-      const msg = `Olá ${appointment.patientName}! Passando para lembrar da sua consulta dia ${dateStr} às ${timeStr}. Qualquer dúvida, estou à disposição. Até logo!`;
+      const msg = `Olá ${appointment.patientName}! Passando para lembrar da sua consulta dia ${dateStr} às ${timeStr}. Por favor, responda SIM para confirmar sua presença ou NÃO caso precise cancelar. Até logo!`;
       window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`, '_blank');
     } finally {
       setWhatsappLoading(false);
