@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirGet, fhirUpdate } from '@/lib/medplum-client';
 import { getExtension, setExtension } from '@hh/fhir';
-import { PLANS, asaas } from '@hh/billing';
+import { PLANS, makeAsaasClient } from '@hh/billing';
 import type { SubscriptionPlan } from '@hh/core';
 import type { Practitioner } from '@medplum/fhirtypes';
 
@@ -22,20 +22,21 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     session.user.projectId,
   );
 
+  const platformClient = makeAsaasClient(process.env.ASAAS_PLATFORM_API_KEY!);
   const email = practitioner.telecom?.find(t => t.system === 'email')?.value ?? '';
   const name = practitioner.name?.[0]?.text ?? email;
 
   // Reuse existing Asaas customer or create new one
   let customerId = getExtension(practitioner, 'ASAAS_CUSTOMER_ID');
   if (!customerId) {
-    const customer = await asaas.createCustomer({ name, cpfCnpj: '00000000000', email });
+    const customer = await platformClient.createCustomer({ name, cpfCnpj: '00000000000', email });
     customerId = customer.id;
   }
 
   const nextDueDate = new Date();
   nextDueDate.setDate(nextDueDate.getDate() + 1);
 
-  const subscription = await asaas.createSubscription({
+  const subscription = await platformClient.createSubscription({
     customer: customerId,
     value: PLANS[plan].priceBRL / 100,
     nextDueDate: nextDueDate.toISOString().slice(0, 10),
