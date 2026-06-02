@@ -2,13 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirGet, fhirUpdate } from '@/lib/medplum-client';
 import { getExtension, setExtension } from '@hh/fhir';
-import { PLANS, makeAsaasClient } from '@hh/billing';
+import { PLANS, getPlatformProvider } from '@hh/billing';
 import type { SubscriptionPlan } from '@hh/core';
 import type { Practitioner } from '@medplum/fhirtypes';
 
 export const POST = withAuth(async (req: NextRequest, session) => {
-  if (!process.env.ASAAS_PLATFORM_API_KEY) {
-    return NextResponse.json({ error: 'Pagamento não configurado na plataforma' }, { status: 503 });
+  let provider;
+  try {
+    provider = getPlatformProvider();
+  } catch {
+    return NextResponse.json(
+      { error: 'Pagamento não configurado na plataforma. Configure MERCADOPAGO_PLATFORM_ACCESS_TOKEN ou ASAAS_PLATFORM_API_KEY.' },
+      { status: 503 },
+    );
   }
 
   const { plan } = await req.json() as { plan: SubscriptionPlan };
@@ -22,42 +28,33 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     session.user.projectId,
   );
 
-  const platformClient = makeAsaasClient(process.env.ASAAS_PLATFORM_API_KEY!);
   const email = practitioner.telecom?.find(t => t.system === 'email')?.value ?? '';
   const name = practitioner.name?.[0]?.text ?? email;
+  const existingSubId = getExtension(practitioner, 'ASAAS_SUBSCRIPTION_ID');
 
-  // Reuse existing Asaas customer or create new one
-  let customerId = getExtension(practitioner, 'ASAAS_CUSTOMER_ID');
-  if (!customerId) {
-    const customer = await platformClient.createCustomer({ name, cpfCnpj: '00000000000', email });
-    customerId = customer.id;
-  }
-
-  const nextDueDate = new Date();
-  nextDueDate.setDate(nextDueDate.getDate() + 1);
-
-  const subscription = await platformClient.createSubscription({
-    customer: customerId,
-    value: PLANS[plan].priceBRL / 100,
-    nextDueDate: nextDueDate.toISOString().slice(0, 10),
+  const result = await provider.createSubscription({
+    customerEmail: email,
+    customerName: name,
+    amount: PLANS[plan].priceBRL / 100,
     description: `Home Health — Plano ${PLANS[plan].name}`,
+    externalReference: session.user.practitionerId,
   });
 
-  const exts = [...(practitioner.extension ?? [])];
-  setExtension(exts, 'ASAAS_CUSTOMER_ID', customerId);
-  setExtension(exts, 'ASAAS_SUBSCRIPTION_ID', subscription.id);
-  setExtension(exts, 'SUBSCRIPTION_PLAN', plan);
-  setExtension(exts, 'SUBSCRIPTION_STATUS', 'trial');
+  if (!existingSubId) {
+    const exts = [...(practitioner.extension ?? [])];
+    setExtension(exts, 'ASAAS_SUBSCRIPTION_ID', result.subscriptionId);
+    setExtension(exts, 'SUBSCRIPTION_PLAN', plan);
 
-  await fhirUpdate<Practitioner>(
-    'Practitioner',
-    session.user.practitionerId,
-    { ...practitioner, extension: exts },
-    session.user.projectId,
-  );
+    await fhirUpdate<Practitioner>(
+      'Practitioner',
+      session.user.practitionerId,
+      { ...practitioner, extension: exts },
+      session.user.projectId,
+    );
+  }
 
   return NextResponse.json({
-    subscriptionId: subscription.id,
-    paymentUrl: `https://www.asaas.com/c/${subscription.id}`,
+    subscriptionId: result.subscriptionId,
+    paymentUrl: result.paymentUrl,
   });
 });
