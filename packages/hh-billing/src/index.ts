@@ -7,4 +7,5 @@ export * from './providers/platform-interface';
 export * from './providers/factory';
 export * from './providers/platform-factory';
 export { MercadoPagoPlatformProvider, mapMpSubscriptionStatus } from './providers/mercadopago/platform';
+export { AsaasPlatformProvider, mapAsaasSubscriptionStatus } from './providers/asaas/platform';
 export { makeAsaasClient } from './providers/asaas/provider';

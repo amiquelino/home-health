@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { parseAsaasWebhook } from '@hh/billing';
-import { fhirSearch, fhirUpdate } from '@/lib/medplum-client';
+import { parseAsaasWebhook, AsaasPlatformProvider } from '@hh/billing';
+import { fhirGet, fhirSearch, fhirUpdate } from '@/lib/medplum-client';
 import { getExtension, setExtension, HH_EXT } from '@hh/fhir';
 import type { Practitioner } from '@medplum/fhirtypes';
 
 async function findPractitionerBySubscription(subscriptionId: string): Promise<Practitioner | null> {
+  // Try direct lookup via externalReference first (new subscriptions store practitionerId)
+  // Fall back to full scan for subscriptions created before this change
   const all = await fhirSearch<Practitioner>('Practitioner', { _count: '200' });
   return all.find(p =>
     p.extension?.some(e => e.url === HH_EXT.ASAAS_SUBSCRIPTION_ID && e.valueString === subscriptionId)
@@ -12,14 +14,32 @@ async function findPractitionerBySubscription(subscriptionId: string): Promise<P
 }
 
 async function updateSubscriptionStatus(subscriptionId: string, status: string) {
-  const practitioner = await findPractitionerBySubscription(subscriptionId);
-  if (!practitioner?.id) return;
+  if (!process.env.ASAAS_PLATFORM_API_KEY) return;
+  const provider = new AsaasPlatformProvider(process.env.ASAAS_PLATFORM_API_KEY);
 
-  const projectId = getExtension(practitioner, 'PROJECT_ID') ?? process.env.MEDPLUM_PROJECT_ID!;
-  const exts = [...(practitioner.extension ?? [])];
-  setExtension(exts, 'SUBSCRIPTION_STATUS', status);
+  try {
+    // Fetch subscription to get externalReference (practitionerId)
+    const sub = await provider.fetchSubscription(subscriptionId);
+    const projectId = process.env.MEDPLUM_PROJECT_ID!;
 
-  await fhirUpdate<Practitioner>('Practitioner', practitioner.id, { ...practitioner, extension: exts }, projectId);
+    if (sub.externalReference) {
+      // Direct lookup — fast path for new subscriptions
+      const practitioner = await fhirGet<Practitioner>('Practitioner', sub.externalReference, projectId);
+      const exts = [...(practitioner.extension ?? [])];
+      setExtension(exts, 'SUBSCRIPTION_STATUS', status);
+      await fhirUpdate<Practitioner>('Practitioner', practitioner.id!, { ...practitioner, extension: exts }, projectId);
+    } else {
+      // Fallback — scan all practitioners (legacy subscriptions without externalReference)
+      const practitioner = await findPractitionerBySubscription(subscriptionId);
+      if (!practitioner?.id) return;
+      const pProjectId = getExtension(practitioner, 'PROJECT_ID') ?? projectId;
+      const exts = [...(practitioner.extension ?? [])];
+      setExtension(exts, 'SUBSCRIPTION_STATUS', status);
+      await fhirUpdate<Practitioner>('Practitioner', practitioner.id, { ...practitioner, extension: exts }, pProjectId);
+    }
+  } catch (err) {
+    console.error('Asaas webhook error:', err);
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -34,13 +54,11 @@ export async function POST(req: NextRequest) {
 
   switch (event.type) {
     case 'payment.succeeded':
+    case 'subscription.activated':
       await updateSubscriptionStatus(event.subscriptionId, 'active');
       break;
     case 'payment.failed':
       await updateSubscriptionStatus(event.subscriptionId, 'past_due');
-      break;
-    case 'subscription.activated':
-      await updateSubscriptionStatus(event.subscriptionId, 'active');
       break;
     case 'subscription.cancelled':
       await updateSubscriptionStatus(event.subscriptionId, 'cancelled');
