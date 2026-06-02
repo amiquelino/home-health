@@ -36,6 +36,9 @@ export const HH_EXT = {
   PROJECT_ID: `${BASE}/project-id`,
   SUBSCRIPTION_PLAN: `${BASE}/subscription-plan`,
   SUBSCRIPTION_STATUS: `${BASE}/subscription-status`,
+  ASAAS_CUSTOMER_ID: `${BASE}/asaas-customer-id`,
+  ASAAS_SUBSCRIPTION_ID: `${BASE}/asaas-subscription-id`,
+  CREATED_AT: `${BASE}/created-at`,
   USER_ROLE: `${BASE}/user-role`,
 } as const;
 

@@ -1,6 +1,6 @@
 import type { PaymentProvider, PixChargeResult } from '../interface';
 
-function makeClient(apiKey: string) {
+export function makeAsaasClient(apiKey: string) {
   const BASE_URL = process.env.ASAAS_SANDBOX === 'true'
     ? 'https://api-sandbox.asaas.com/api/v3'
     : 'https://api.asaas.com/api/v3';
@@ -22,16 +22,21 @@ function makeClient(apiKey: string) {
         method: 'POST',
         body: JSON.stringify({ ...data, billingType: 'PIX' }),
       }),
+    createSubscription: (data: { customer: string; value: number; nextDueDate: string; description: string }) =>
+      request<{ id: string }>('/subscriptions', {
+        method: 'POST',
+        body: JSON.stringify({ ...data, billingType: 'PIX', cycle: 'MONTHLY' }),
+      }),
     getPixQrCode: (chargeId: string) =>
       request<{ payload: string }>(`/payments/${chargeId}/pixQrCode`),
   };
 }
 
 export class AsaasProvider implements PaymentProvider {
-  private client: ReturnType<typeof makeClient>;
+  private client: ReturnType<typeof makeAsaasClient>;
 
   constructor(apiKey: string) {
-    this.client = makeClient(apiKey);
+    this.client = makeAsaasClient(apiKey);
   }
 
   async createPixCharge(params: {
