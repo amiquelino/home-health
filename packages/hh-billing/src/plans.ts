@@ -33,7 +33,21 @@ export const PLANS: Record<SubscriptionPlan, Plan> = {
   },
 };
 
+export type PlanFeature = 'agenda' | 'pacientes' | 'evolucoes' | 'whatsapp' | 'financeiro' | 'multi-agenda';
+
 export type AccessStatus = 'active' | 'trial' | 'expired' | 'blocked';
+
+// Trial users get Pro-level access so they can evaluate the product
+export function hasFeature(
+  feature: PlanFeature,
+  plan: string | null | undefined,
+  accessStatus: AccessStatus,
+): boolean {
+  if (accessStatus === 'trial') return PLANS.pro.features.includes(feature);
+  if (accessStatus !== 'active') return false;
+  const p = plan as import('@hh/core').SubscriptionPlan;
+  return !!PLANS[p]?.features.includes(feature);
+}
 
 export function getAccessStatus(params: {
   subscriptionStatus: string;

@@ -2,11 +2,19 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirGet } from '@/lib/medplum-client';
 import { fromFHIRPatient, getExtension } from '@hh/fhir';
-import { getProvider } from '@hh/billing';
+import { getProvider, hasFeature, getAccessStatus } from '@hh/billing';
 import type { ProviderType } from '@hh/billing';
 import type { Patient, Practitioner } from '@medplum/fhirtypes';
 
 export const POST = withAuth(async (req: NextRequest, session) => {
+  const access = getAccessStatus({
+    subscriptionStatus: session.user.subscriptionStatus ?? 'trial',
+    createdAt: new Date(session.user.createdAt || Date.now()),
+  });
+  if (!hasFeature('financeiro', session.user.subscriptionPlan, access)) {
+    return NextResponse.json({ error: 'Recurso disponível a partir do plano Pro' }, { status: 403 });
+  }
+
   const practitioner = await fhirGet<Practitioner>(
     'Practitioner',
     session.user.practitionerId,

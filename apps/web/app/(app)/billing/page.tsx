@@ -60,10 +60,13 @@ export default function BillingPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [loading, setLoading] = useState(true);
 
+  const [upgradRequired, setUpgradeRequired] = useState(false);
+
   const load = useCallback(async () => {
     setLoading(true);
     try {
       const res = await fetch(`/api/billing/summary?year=${year}&month=${month}`);
+      if (res.status === 403) { setUpgradeRequired(true); return; }
       if (res.ok) setSummary(await res.json());
     } finally {
       setLoading(false);
@@ -87,6 +90,16 @@ export default function BillingPage() {
 
   return (
     <div className="space-y-6">
+      {upgradRequired && (
+        <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center">
+          <p className="text-2xl mb-2">💳</p>
+          <h2 className="text-lg font-bold text-slate-900 mb-2">Financeiro disponível no plano Pro</h2>
+          <p className="text-sm text-slate-500 mb-6">Acesse relatórios de receita, cobranças e geração de PIX por apenas R$197/mês.</p>
+          <a href="/subscribe" className="inline-block bg-sky-600 hover:bg-sky-700 text-white font-medium px-6 py-2.5 rounded-xl text-sm transition-colors">
+            Ver planos
+          </a>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-slate-900">Financeiro</h1>
