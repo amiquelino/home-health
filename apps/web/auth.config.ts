@@ -8,12 +8,13 @@ export const authConfig: NextAuthConfig = {
   callbacks: {
     jwt({ token, user }) {
       if (user) {
-        const u = user as { practitionerId?: string; projectId?: string; role?: string; createdAt?: string; subscriptionStatus?: string };
+        const u = user as { practitionerId?: string; projectId?: string; role?: string; createdAt?: string; subscriptionStatus?: string; subscriptionPlan?: string };
         token.practitionerId = u.practitionerId ?? '';
         token.projectId = u.projectId ?? '';
         token.role = u.role ?? '';
         token.createdAt = u.createdAt ?? '';
         token.subscriptionStatus = u.subscriptionStatus ?? 'trial';
+        token.subscriptionPlan = u.subscriptionPlan ?? 'starter';
       }
       return token;
     },
@@ -23,6 +24,7 @@ export const authConfig: NextAuthConfig = {
       session.user.role = token.role as string;
       session.user.createdAt = token.createdAt as string ?? '';
       session.user.subscriptionStatus = token.subscriptionStatus as string ?? 'trial';
+      session.user.subscriptionPlan = (token.subscriptionPlan as string) ?? 'starter';
       return session;
     },
   },

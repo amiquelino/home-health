@@ -1,4 +1,5 @@
 export * from './plans';
+export type { PlanFeature } from './plans';
 export * from './providers/asaas/client';
 export * from './providers/asaas/webhooks';
 export * from './providers/interface';

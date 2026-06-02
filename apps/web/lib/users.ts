@@ -42,6 +42,7 @@ export interface AppUser {
   role: string;
   createdAt: string;
   subscriptionStatus: string;
+  subscriptionPlan: string;
 }
 
 export async function verifyUser(email: string, password: string): Promise<AppUser | null> {
@@ -69,6 +70,8 @@ export async function verifyUser(email: string, password: string): Promise<AppUs
     ?? new Date().toISOString();
   const subscriptionStatus = practitioner.extension?.find(e => e.url === HH_EXT.SUBSCRIPTION_STATUS)?.valueString
     ?? 'trial';
+  const subscriptionPlan = practitioner.extension?.find(e => e.url === HH_EXT.SUBSCRIPTION_PLAN)?.valueString
+    ?? 'starter';
 
   return {
     id: practitioner.id!,
@@ -79,6 +82,7 @@ export async function verifyUser(email: string, password: string): Promise<AppUs
     role,
     createdAt,
     subscriptionStatus,
+    subscriptionPlan,
   };
 }
 
@@ -114,5 +118,6 @@ export async function createUser(params: {
     role,
     createdAt: now,
     subscriptionStatus: 'trial',
+    subscriptionPlan: 'starter',
   };
 }

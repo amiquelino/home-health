@@ -8,6 +8,7 @@ declare module 'next-auth' {
     role: string;
     createdAt: string;
     subscriptionStatus: string;
+    subscriptionPlan: string;
   }
 
   interface Session {
@@ -20,6 +21,7 @@ declare module 'next-auth' {
       role: string;
       createdAt: string;
       subscriptionStatus: string;
+      subscriptionPlan: string;
     };
   }
 }
@@ -31,5 +33,6 @@ declare module 'next-auth/jwt' {
     role?: string;
     createdAt?: string;
     subscriptionStatus?: string;
+    subscriptionPlan?: string;
   }
 }

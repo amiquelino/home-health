@@ -2,9 +2,17 @@ import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
 import { fhirSearch } from '@/lib/medplum-client';
 import { fromFHIRAppointment } from '@hh/fhir';
+import { hasFeature, getAccessStatus } from '@hh/billing';
 import type { Appointment } from '@medplum/fhirtypes';
 
 export const GET = withAuth(async (req: NextRequest, session) => {
+  const access = getAccessStatus({
+    subscriptionStatus: session.user.subscriptionStatus ?? 'trial',
+    createdAt: new Date(session.user.createdAt || Date.now()),
+  });
+  if (!hasFeature('financeiro', session.user.subscriptionPlan, access)) {
+    return NextResponse.json({ error: 'Recurso disponível a partir do plano Pro' }, { status: 403 });
+  }
   const { searchParams } = req.nextUrl;
   const now = new Date();
   const year = parseInt(searchParams.get('year') ?? String(now.getFullYear()));

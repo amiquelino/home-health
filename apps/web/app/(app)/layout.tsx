@@ -30,7 +30,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      <Sidebar />
+      <Sidebar
+        subscriptionPlan={session.user.subscriptionPlan ?? 'starter'}
+        accessStatus={accessStatus}
+      />
 
       <div className="flex-1 flex flex-col min-w-0">
         {/* Trial banner */}
