@@ -2,8 +2,40 @@ import type { PlatformProvider, PlatformSubscriptionResult } from '../platform-i
 
 const BASE = 'https://api.mercadopago.com';
 
+// Maps MP subscription status → internal SubscriptionStatus
+export function mapMpSubscriptionStatus(mpStatus: string): string {
+  switch (mpStatus) {
+    case 'authorized': return 'active';
+    case 'paused':     return 'past_due';
+    case 'cancelled':  return 'cancelled';
+    default:           return 'trial';
+  }
+}
+
 export class MercadoPagoPlatformProvider implements PlatformProvider {
   constructor(private readonly accessToken: string) {}
+
+  async fetchSubscription(subscriptionId: string): Promise<{ id: string; status: string; externalReference: string }> {
+    const res = await fetch(`${BASE}/preapproval/${subscriptionId}`, {
+      headers: { 'Authorization': `Bearer ${this.accessToken}` },
+    });
+    if (!res.ok) throw new Error(`MP fetch subscription error ${res.status}: ${await res.text()}`);
+    const data = await res.json();
+    return {
+      id: data.id,
+      status: mapMpSubscriptionStatus(data.status),
+      externalReference: data.external_reference ?? '',
+    };
+  }
+
+  async fetchPaymentSubscriptionId(paymentId: string): Promise<string | null> {
+    const res = await fetch(`${BASE}/v1/payments/${paymentId}`, {
+      headers: { 'Authorization': `Bearer ${this.accessToken}` },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data.metadata?.preapproval_id ?? null;
+  }
 
   async createSubscription(params: {
     customerEmail: string;
