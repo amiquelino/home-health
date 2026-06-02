@@ -2,7 +2,8 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import type { PlanFeature } from '@hh/billing';
+import { hasFeature } from '@hh/billing';
+import type { PlanFeature, AccessStatus } from '@hh/billing';
 
 const nav: { href: string; label: string; icon: string; feature?: PlanFeature }[] = [
   { href: '/schedule',  label: 'Agenda',         icon: '📅' },
@@ -17,19 +18,9 @@ interface Props {
   accessStatus?: string;
 }
 
-function canAccess(feature: PlanFeature | undefined, plan: string, status: string): boolean {
-  if (!feature) return true;
-  if (status === 'trial') return ['agenda','pacientes','evolucoes','whatsapp','financeiro'].includes(feature);
-  if (status !== 'active') return false;
-  const proFeatures = ['agenda','pacientes','evolucoes','whatsapp','financeiro'];
-  const clinicFeatures = [...proFeatures, 'multi-agenda'];
-  if (plan === 'clinic') return clinicFeatures.includes(feature);
-  if (plan === 'pro') return proFeatures.includes(feature);
-  return ['agenda','pacientes','evolucoes'].includes(feature);
-}
-
 export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }: Props) {
   const pathname = usePathname();
+  const status = accessStatus as AccessStatus;
 
   return (
     <>
@@ -52,7 +43,7 @@ export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }
         <nav className="flex-1 space-y-1">
           {nav.map((item) => {
             const active = pathname.startsWith(item.href);
-            const allowed = canAccess(item.feature, subscriptionPlan, accessStatus);
+            const allowed = hasFeature(item.feature ?? 'agenda', subscriptionPlan, status) || !item.feature;
             if (!allowed) {
               return (
                 <Link
@@ -89,7 +80,7 @@ export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-50">
         {nav.slice(0, 4).map((item) => {
           const active = pathname.startsWith(item.href);
-          const allowed = canAccess(item.feature, subscriptionPlan, accessStatus);
+          const allowed = hasFeature(item.feature ?? 'agenda', subscriptionPlan, status) || !item.feature;
           return (
             <Link
               key={item.href}
