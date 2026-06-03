@@ -41,6 +41,13 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
   const [selectedPractitionerId, setSelectedPractitionerId] = useState(
     defaultPractitionerId ?? (practitioners[0]?.id ?? '')
   );
+
+  // Sync when practitioners list loads after initial render
+  useEffect(() => {
+    if (!selectedPractitionerId && practitioners.length > 0) {
+      setSelectedPractitionerId(defaultPractitionerId ?? practitioners[0].id);
+    }
+  }, [practitioners, defaultPractitionerId, selectedPractitionerId]);
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [pixResult, setPixResult] = useState<{ pixCopiaECola: string; invoiceUrl: string } | null>(null);
@@ -85,7 +92,10 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     if (isEdit) return;
     const t = setTimeout(async () => {
       if (patientQuery.length < 2) { setPatients([]); return; }
-      const practParam = selectedPractitionerId ? `&practitionerId=${selectedPractitionerId}` : '';
+      // Owner with team: search across all practitioners (no practitionerId filter)
+      const practParam = selectedPractitionerId && practitioners.length <= 1
+        ? `&practitionerId=${selectedPractitionerId}`
+        : '';
       const res = await fetch(`/api/patients?q=${encodeURIComponent(patientQuery)}${practParam}`);
       if (res.ok) setPatients(await res.json());
     }, 300);
