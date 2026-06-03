@@ -5,21 +5,23 @@ import { usePathname } from 'next/navigation';
 import { hasFeature } from '@hh/billing';
 import type { PlanFeature, AccessStatus } from '@hh/billing';
 
-const nav: { href: string; label: string; icon: string; feature?: PlanFeature }[] = [
-  { href: '/home',      label: 'Dashboard',          icon: '🏠' },
-  { href: '/schedule',  label: 'Agenda',          icon: '📅' },
-  { href: '/patients',  label: 'Pacientes',       icon: '👥' },
-  { href: '/notes',     label: 'Evoluções',       icon: '📝' },
-  { href: '/billing',   label: 'Financeiro',      icon: '💳', feature: 'financeiro' },
-  { href: '/settings',  label: 'Configurações',   icon: '⚙️' },
+const nav: { href: string; label: string; icon: string; feature?: PlanFeature; ownerOnly?: boolean }[] = [
+  { href: '/home',           label: 'Dashboard',      icon: '🏠' },
+  { href: '/schedule',       label: 'Agenda',         icon: '📅' },
+  { href: '/patients',       label: 'Pacientes',      icon: '👥' },
+  { href: '/notes',          label: 'Evoluções',      icon: '📝' },
+  { href: '/billing',        label: 'Financeiro',     icon: '💳', feature: 'financeiro' },
+  { href: '/settings/team',  label: 'Equipe',         icon: '👤', feature: 'equipe', ownerOnly: true },
+  { href: '/settings',       label: 'Configurações',  icon: '⚙️' },
 ];
 
 interface Props {
   subscriptionPlan?: string;
   accessStatus?: string;
+  role?: string;
 }
 
-export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }: Props) {
+export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial', role = 'practitioner' }: Props) {
   const pathname = usePathname();
   const status = accessStatus as AccessStatus;
 
@@ -43,7 +45,8 @@ export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }
 
         <nav className="flex-1 space-y-1">
           {nav.map((item) => {
-            const active = pathname.startsWith(item.href);
+            if (item.ownerOnly && role !== 'owner') return null;
+            const active = pathname === item.href || (item.href !== '/settings' && pathname.startsWith(item.href));
             const allowed = hasFeature(item.feature ?? 'agenda', subscriptionPlan, status) || !item.feature;
             if (!allowed) {
               return (
@@ -79,8 +82,8 @@ export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-50">
-        {nav.slice(0, 5).map((item) => {
-          const active = pathname.startsWith(item.href);
+        {nav.filter(item => !item.ownerOnly || role === 'owner').slice(0, 5).map((item) => {
+          const active = pathname === item.href || (item.href !== '/settings' && pathname.startsWith(item.href));
           const allowed = hasFeature(item.feature ?? 'agenda', subscriptionPlan, status) || !item.feature;
           return (
             <Link
