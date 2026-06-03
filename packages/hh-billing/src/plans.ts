@@ -22,18 +22,18 @@ export const PLANS: Record<SubscriptionPlan, Plan> = {
     name: 'Pro',
     priceBRL: 19700,
     maxPractitioners: 5,
-    features: ['agenda', 'pacientes', 'evolucoes', 'whatsapp', 'financeiro'],
+    features: ['agenda', 'pacientes', 'evolucoes', 'whatsapp', 'financeiro', 'equipe'],
   },
   clinic: {
     id: 'clinic',
     name: 'Clínica',
     priceBRL: 49700,
     maxPractitioners: 20,
-    features: ['agenda', 'pacientes', 'evolucoes', 'whatsapp', 'financeiro', 'multi-agenda'],
+    features: ['agenda', 'pacientes', 'evolucoes', 'whatsapp', 'financeiro', 'multi-agenda', 'equipe'],
   },
 };
 
-export type PlanFeature = 'agenda' | 'pacientes' | 'evolucoes' | 'whatsapp' | 'financeiro' | 'multi-agenda';
+export type PlanFeature = 'agenda' | 'pacientes' | 'evolucoes' | 'whatsapp' | 'financeiro' | 'multi-agenda' | 'equipe';
 
 export type AccessStatus = 'active' | 'trial' | 'expired' | 'blocked';
 

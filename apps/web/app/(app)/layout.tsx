@@ -33,6 +33,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
       <Sidebar
         subscriptionPlan={session.user.subscriptionPlan ?? 'starter'}
         accessStatus={accessStatus}
+        role={session.user.role ?? 'practitioner'}
       />
 
       <div className="flex-1 flex flex-col min-w-0">

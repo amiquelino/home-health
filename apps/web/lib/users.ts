@@ -91,9 +91,11 @@ export async function createUser(params: {
   email: string;
   password: string;
   role?: string;
+  projectId?: string;
 }): Promise<AppUser> {
   const passwordHash = await hashPassword(params.password);
   const role = params.role ?? 'owner';
+  const projectId = params.projectId ?? process.env.MEDPLUM_PROJECT_ID!;
 
   const practitioner = await fhirCreate<Practitioner>('Practitioner', {
     resourceType: 'Practitioner',
@@ -102,11 +104,11 @@ export async function createUser(params: {
     extension: [
       { url: PASSWORD_HASH_EXT, valueString: passwordHash },
       { url: ROLE_EXT, valueString: role },
-      { url: HH_EXT.PROJECT_ID, valueString: process.env.MEDPLUM_PROJECT_ID! },
+      { url: HH_EXT.PROJECT_ID, valueString: projectId },
       { url: HH_EXT.CREATED_AT, valueString: new Date().toISOString() },
-      { url: HH_EXT.SUBSCRIPTION_STATUS, valueString: 'trial' },
+      { url: HH_EXT.SUBSCRIPTION_STATUS, valueString: role === 'owner' ? 'trial' : 'active' },
     ],
-  });
+  }, projectId);
 
   const now = new Date().toISOString();
   return {
@@ -114,10 +116,10 @@ export async function createUser(params: {
     name: params.name,
     email: params.email,
     practitionerId: practitioner.id!,
-    projectId: process.env.MEDPLUM_PROJECT_ID!,
+    projectId,
     role,
     createdAt: now,
-    subscriptionStatus: 'trial',
+    subscriptionStatus: role === 'owner' ? 'trial' : 'active',
     subscriptionPlan: 'starter',
   };
 }
