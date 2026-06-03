@@ -22,11 +22,13 @@ export function makeAsaasClient(apiKey: string) {
         method: 'POST',
         body: JSON.stringify({ ...data, billingType: 'PIX' }),
       }),
-    createSubscription: (data: { customer: string; value: number; nextDueDate: string; description: string }) =>
+    createSubscription: (data: { customer: string; value: number; nextDueDate: string; description: string; externalReference?: string }) =>
       request<{ id: string }>('/subscriptions', {
         method: 'POST',
         body: JSON.stringify({ ...data, billingType: 'PIX', cycle: 'MONTHLY' }),
       }),
+    fetchSubscription: (subscriptionId: string) =>
+      request<{ id: string; status: string; externalReference?: string }>(`/subscriptions/${subscriptionId}`),
     getPixQrCode: (chargeId: string) =>
       request<{ payload: string }>(`/payments/${chargeId}/pixQrCode`),
   };
