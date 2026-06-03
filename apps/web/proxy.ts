@@ -22,7 +22,7 @@ export const proxy = auth((req) => {
   }
 
   if (isLoggedIn && (pathname === '/login' || pathname === '/signup')) {
-    return NextResponse.redirect(new URL('/schedule', req.nextUrl.origin));
+    return NextResponse.redirect(new URL('/home', req.nextUrl.origin));
   }
 
   return NextResponse.next();
