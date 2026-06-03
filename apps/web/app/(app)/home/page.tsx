@@ -71,7 +71,7 @@ export default function HomePage() {
     <div className="space-y-6">
       {/* Header */}
       <div>
-        <h1 className="text-xl font-bold text-slate-900">Início</h1>
+        <h1 className="text-xl font-bold text-slate-900">Dashboard</h1>
         <p className="text-sm text-slate-500 capitalize">{todayLabel}</p>
       </div>
 
