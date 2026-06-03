@@ -8,10 +8,13 @@ import type { SubscriptionPlan } from '@hh/core';
 import type { Practitioner } from '@medplum/fhirtypes';
 
 export const GET = withAuth(async (_req, session) => {
-  const all = await fhirSearch<Practitioner>('Practitioner', { _count: '100', active: 'true' }, session.user.projectId);
+  const all = await fhirSearch<Practitioner>('Practitioner', { _count: '100' }, session.user.projectId);
 
   const members = all
-    .filter(p => p.extension?.some(e => e.url === HH_EXT.PROJECT_ID && e.valueString === session.user.projectId))
+    .filter(p =>
+      p.active !== false &&
+      p.extension?.some(e => e.url === HH_EXT.PROJECT_ID && e.valueString === session.user.projectId)
+    )
     .map(p => ({
       id: p.id!,
       name: p.name?.[0]?.text ?? '',
@@ -38,8 +41,9 @@ export const POST = withAuth(async (req: NextRequest, session) => {
   // Check plan limit
   const plan = (session.user.subscriptionPlan ?? 'starter') as SubscriptionPlan;
   const limit = PLAN_LIMITS[plan]?.maxPractitioners ?? 1;
-  const existing = await fhirSearch<Practitioner>('Practitioner', { _count: '100', active: 'true' }, session.user.projectId);
+  const existing = await fhirSearch<Practitioner>('Practitioner', { _count: '100' }, session.user.projectId);
   const currentCount = existing.filter(p =>
+    p.active !== false &&
     p.extension?.some(e => e.url === HH_EXT.PROJECT_ID && e.valueString === session.user.projectId)
   ).length;
 
