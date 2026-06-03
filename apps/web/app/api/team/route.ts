@@ -7,19 +7,27 @@ import { PLAN_LIMITS } from '@hh/core';
 import type { SubscriptionPlan } from '@hh/core';
 import type { Practitioner } from '@medplum/fhirtypes';
 
+const ROLE_EXT = 'https://homehealth.com.br/fhir/StructureDefinition/role';
+
+function isTeamMember(p: Practitioner, ownerId: string): boolean {
+  return (
+    p.active !== false &&
+    p.extension?.some(e => e.url === HH_EXT.OWNER_ID && e.valueString === ownerId) === true
+  );
+}
+
 export const GET = withAuth(async (_req, session) => {
+  const ownerId = session.user.practitionerId;
   const all = await fhirSearch<Practitioner>('Practitioner', { _count: '100' }, session.user.projectId);
 
+  // Include the owner + their non-owner team members
   const members = all
-    .filter(p =>
-      p.active !== false &&
-      p.extension?.some(e => e.url === HH_EXT.PROJECT_ID && e.valueString === session.user.projectId)
-    )
+    .filter(p => p.id === ownerId || isTeamMember(p, ownerId))
     .map(p => ({
       id: p.id!,
       name: p.name?.[0]?.text ?? '',
       email: p.telecom?.find(t => t.system === 'email')?.value ?? '',
-      role: p.extension?.find(e => e.url === 'https://homehealth.com.br/fhir/StructureDefinition/role')?.valueString ?? 'practitioner',
+      role: p.extension?.find(e => e.url === ROLE_EXT)?.valueString ?? 'practitioner',
     }));
 
   return NextResponse.json(members);
@@ -38,14 +46,12 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     return NextResponse.json({ error: 'Senha deve ter pelo menos 8 caracteres' }, { status: 400 });
   }
 
-  // Check plan limit
+  // Check plan limit (owner + team members)
   const plan = (session.user.subscriptionPlan ?? 'starter') as SubscriptionPlan;
   const limit = PLAN_LIMITS[plan]?.maxPractitioners ?? 1;
+  const ownerId = session.user.practitionerId;
   const existing = await fhirSearch<Practitioner>('Practitioner', { _count: '100' }, session.user.projectId);
-  const currentCount = existing.filter(p =>
-    p.active !== false &&
-    p.extension?.some(e => e.url === HH_EXT.PROJECT_ID && e.valueString === session.user.projectId)
-  ).length;
+  const currentCount = existing.filter(p => p.id === ownerId || isTeamMember(p, ownerId)).length;
 
   if (currentCount >= limit) {
     return NextResponse.json({
@@ -65,6 +71,7 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     password,
     role: 'practitioner',
     projectId: session.user.projectId,
+    ownerId: session.user.practitionerId,
   });
 
   return NextResponse.json({ id: user.practitionerId, name: user.name, email: user.email, role: user.role }, { status: 201 });

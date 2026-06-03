@@ -33,6 +33,7 @@ export const HH_EXT = {
   DEFAULT_PRICE: `${BASE}/default-price`,
 
   // Tenant / SaaS
+  OWNER_ID: `${BASE}/owner-id`,
   PROJECT_ID: `${BASE}/project-id`,
   SUBSCRIPTION_PLAN: `${BASE}/subscription-plan`,
   SUBSCRIPTION_STATUS: `${BASE}/subscription-status`,
