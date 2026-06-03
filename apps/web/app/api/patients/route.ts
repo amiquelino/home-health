@@ -7,10 +7,16 @@ import type { Patient } from '@medplum/fhirtypes';
 
 export const GET = withAuth(async (req: NextRequest, session) => {
   const q = req.nextUrl.searchParams.get('q') ?? '';
+  const practitionerIdParam = req.nextUrl.searchParams.get('practitionerId');
+  const practitionerId =
+    practitionerIdParam && session.user.role === 'owner'
+      ? practitionerIdParam
+      : session.user.practitionerId;
+
   const params: Record<string, string | string[]> = {
     _sort: '-_lastUpdated',
     _count: '50',
-    'general-practitioner': `Practitioner/${session.user.practitionerId}`,
+    'general-practitioner': `Practitioner/${practitionerId}`,
   };
   if (q) params.name = q;
 
