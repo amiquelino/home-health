@@ -6,7 +6,7 @@ import { hasFeature } from '@hh/billing';
 import type { PlanFeature, AccessStatus } from '@hh/billing';
 
 const nav: { href: string; label: string; icon: string; feature?: PlanFeature }[] = [
-  { href: '/home',      label: 'Início',          icon: '🏠' },
+  { href: '/home',      label: 'Dashboard',          icon: '🏠' },
   { href: '/schedule',  label: 'Agenda',          icon: '📅' },
   { href: '/patients',  label: 'Pacientes',       icon: '👥' },
   { href: '/notes',     label: 'Evoluções',       icon: '📝' },
