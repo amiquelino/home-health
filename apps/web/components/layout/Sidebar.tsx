@@ -6,7 +6,8 @@ import { hasFeature } from '@hh/billing';
 import type { PlanFeature, AccessStatus } from '@hh/billing';
 
 const nav: { href: string; label: string; icon: string; feature?: PlanFeature }[] = [
-  { href: '/schedule',  label: 'Agenda',         icon: '📅' },
+  { href: '/home',      label: 'Início',          icon: '🏠' },
+  { href: '/schedule',  label: 'Agenda',          icon: '📅' },
   { href: '/patients',  label: 'Pacientes',       icon: '👥' },
   { href: '/notes',     label: 'Evoluções',       icon: '📝' },
   { href: '/billing',   label: 'Financeiro',      icon: '💳', feature: 'financeiro' },
@@ -78,7 +79,7 @@ export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial' }
 
       {/* Mobile bottom nav */}
       <nav className="md:hidden fixed bottom-0 inset-x-0 bg-white border-t border-slate-200 flex z-50">
-        {nav.slice(0, 4).map((item) => {
+        {nav.slice(0, 5).map((item) => {
           const active = pathname.startsWith(item.href);
           const allowed = hasFeature(item.feature ?? 'agenda', subscriptionPlan, status) || !item.feature;
           return (

@@ -18,7 +18,7 @@ export default async function LoginPage({
       await signIn('credentials', {
         email: formData.get('email'),
         password: formData.get('password'),
-        redirectTo: registered === '1' ? '/onboarding' : '/schedule',
+        redirectTo: registered === '1' ? '/onboarding' : '/home',
       });
     } catch (err) {
       if (err instanceof AuthError) {
