@@ -21,10 +21,23 @@ export const GET = withAuth(async (req: NextRequest, session) => {
   const dateFrom = searchParams.get('from');
   const dateTo = searchParams.get('to');
   const practitionersParam = searchParams.get('practitioners');
+  const patientIdParam = searchParams.get('patientId');
 
   const dateFilter: string[] = [];
   if (dateFrom) dateFilter.push(`ge${dateFrom}`);
   if (dateTo) dateFilter.push(`le${dateTo}`);
+
+  // Patient history view: fetch all appointments for a specific patient
+  if (patientIdParam) {
+    const params: Record<string, string | string[]> = {
+      _sort: '-date',
+      _count: '200',
+      actor: `Patient/${patientIdParam}`,
+    };
+    if (dateFilter.length) params['date'] = dateFilter;
+    const results = await fhirSearch<Appointment>('Appointment', params, session.user.projectId);
+    return NextResponse.json(results.map(fromFHIRAppointment));
+  }
 
   let practitionerIds: string[];
   if (practitionersParam && session.user.role === 'owner') {

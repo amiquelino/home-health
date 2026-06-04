@@ -1,17 +1,106 @@
 'use client';
 
-import { useState } from 'react';
-import Link from 'next/link';
-import type { HHPatient } from '@hh/core';
-import { formatPhone, formatCPF, formatDate } from '@hh/core';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import type { HHPatient, HHAppointment } from '@hh/core';
+import { formatPhone, formatCPF, formatDate, formatTime, APPOINTMENT_STATUS_LABELS } from '@hh/core';
+import type { SOAPNote } from '@hh/fhir';
 import { PatientModal } from '@/components/patients/PatientModal';
+import Link from 'next/link';
+
+type Tab = 'dados' | 'consultas' | 'evolucoes';
+
+const STATUS_BADGE: Record<string, string> = {
+  scheduled:  'bg-sky-100 text-sky-700',
+  confirmed:  'bg-green-100 text-green-700',
+  completed:  'bg-slate-100 text-slate-600',
+  cancelled:  'bg-red-100 text-red-500',
+  'no-show':  'bg-orange-100 text-orange-700',
+};
+
+const SOAP_LABELS = {
+  subjective: 'S — Subjetivo',
+  objective:  'O — Objetivo',
+  assessment: 'A — Avaliação',
+  plan:       'P — Plano',
+} as const;
+
+const emptySOAP = { subjective: '', objective: '', assessment: '', plan: '' };
 
 export function PatientDetailClient({ patient: initial }: { patient: HHPatient }) {
   const [patient, setPatient] = useState(initial);
   const [showEdit, setShowEdit] = useState(false);
+  const [tab, setTab] = useState<Tab>('dados');
+
+  // Appointments
+  const [appointments, setAppointments] = useState<HHAppointment[]>([]);
+  const [apptLoading, setApptLoading] = useState(false);
+
+  // SOAP notes
+  const [notes, setNotes] = useState<SOAPNote[]>([]);
+  const [notesLoading, setNotesLoading] = useState(false);
+  const [showSOAPForm, setShowSOAPForm] = useState(false);
+  const [soapForm, setSoapForm] = useState(emptySOAP);
+  const [soapSaving, setSoapSaving] = useState(false);
+  const [soapError, setSoapError] = useState<string | null>(null);
+
+  const loadAppointments = useCallback(async () => {
+    setApptLoading(true);
+    try {
+      const res = await fetch(`/api/appointments?patientId=${patient.id}`);
+      if (res.ok) setAppointments(await res.json());
+    } finally {
+      setApptLoading(false);
+    }
+  }, [patient.id]);
+
+  const loadNotes = useCallback(async () => {
+    setNotesLoading(true);
+    try {
+      const res = await fetch(`/api/soap?patientId=${patient.id}`);
+      if (res.ok) setNotes(await res.json());
+    } finally {
+      setNotesLoading(false);
+    }
+  }, [patient.id]);
+
+  const loaded = useRef({ consultas: false, evolucoes: false });
+  useEffect(() => {
+    if (tab === 'consultas' && !loaded.current.consultas) {
+      loaded.current.consultas = true;
+      loadAppointments();
+    }
+    if (tab === 'evolucoes' && !loaded.current.evolucoes) {
+      loaded.current.evolucoes = true;
+      loadNotes();
+    }
+  }, [tab, loadAppointments, loadNotes]);
+
+  async function handleSOAPSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setSoapSaving(true);
+    setSoapError(null);
+    try {
+      const res = await fetch('/api/soap', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: patient.id, ...soapForm }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setSoapError(data.error ?? 'Erro ao salvar evolução');
+        return;
+      }
+      setSoapForm(emptySOAP);
+      setShowSOAPForm(false);
+      await loadNotes();
+    } finally {
+      setSoapSaving(false);
+    }
+  }
 
   return (
     <>
+      {/* Back */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/patients" className="text-slate-400 hover:text-slate-600 text-sm">
           ← Pacientes
@@ -45,29 +134,163 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
         </div>
       </div>
 
-      {/* Info */}
-      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100 mb-4">
-        {patient.cpf && <Row label="CPF" value={formatCPF(patient.cpf)} />}
-        {patient.email && <Row label="E-mail" value={patient.email} />}
-        {patient.birthDate && <Row label="Nascimento" value={formatDate(patient.birthDate)} />}
-        {patient.notes && <Row label="Observações" value={patient.notes} />}
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-slate-200 mb-5">
+        {([
+          { key: 'dados',     label: 'Dados' },
+          { key: 'consultas', label: 'Consultas' },
+          { key: 'evolucoes', label: 'Evoluções' },
+        ] as { key: Tab; label: string }[]).map(t => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+              tab === t.key
+                ? 'border-sky-600 text-sky-700'
+                : 'border-transparent text-slate-500 hover:text-slate-800'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
       </div>
 
-      {/* Actions */}
-      <div className="grid grid-cols-2 gap-3">
-        <Link
-          href={`/schedule?patient=${patient.id}`}
-          className="bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium py-2.5 rounded-lg text-center transition-colors"
-        >
-          + Agendar consulta
-        </Link>
-        <Link
-          href={`/patients/${patient.id}/notes`}
-          className="border border-slate-300 text-slate-700 text-sm font-medium py-2.5 rounded-lg text-center hover:bg-slate-50 transition-colors"
-        >
-          Ver evoluções
-        </Link>
-      </div>
+      {/* ── Dados ── */}
+      {tab === 'dados' && (
+        <div className="space-y-4">
+          <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+            {patient.cpf      && <Row label="CPF"          value={formatCPF(patient.cpf)} />}
+            {patient.email    && <Row label="E-mail"       value={patient.email} />}
+            {patient.birthDate && <Row label="Nascimento"  value={formatDate(patient.birthDate)} />}
+            {patient.notes    && <Row label="Observações"  value={patient.notes} />}
+          </div>
+          <Link
+            href={`/schedule`}
+            className="block w-full bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium py-2.5 rounded-lg text-center transition-colors"
+          >
+            + Agendar consulta
+          </Link>
+        </div>
+      )}
+
+      {/* ── Consultas ── */}
+      {tab === 'consultas' && (
+        <div>
+          {apptLoading ? (
+            <div className="py-12 text-center text-slate-400 text-sm">Carregando…</div>
+          ) : appointments.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+              <p className="text-slate-400 text-sm">Nenhuma consulta registrada.</p>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+              {appointments.map(a => (
+                <div key={a.id} className="flex items-center gap-4 px-4 py-3">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-medium text-slate-900">
+                        {new Date(a.start).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </span>
+                      <span className="text-xs text-slate-500">{formatTime(a.start)}</span>
+                      {a.isHomeVisit && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">Domiciliar</span>
+                      )}
+                    </div>
+                    {a.practitionerName && (
+                      <p className="text-xs text-slate-400 mt-0.5">{a.practitionerName}</p>
+                    )}
+                    {a.notes && (
+                      <p className="text-xs text-slate-500 mt-0.5 truncate">{a.notes}</p>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    {a.price != null && (
+                      <span className="text-sm text-slate-600">
+                        {a.price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </span>
+                    )}
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_BADGE[a.status] ?? STATUS_BADGE.scheduled}`}>
+                      {APPOINTMENT_STATUS_LABELS[a.status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? a.status}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Evoluções ── */}
+      {tab === 'evolucoes' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            {!showSOAPForm && (
+              <button
+                onClick={() => setShowSOAPForm(true)}
+                className="ml-auto bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                + Nova evolução
+              </button>
+            )}
+          </div>
+
+          {showSOAPForm && (
+            <form onSubmit={handleSOAPSubmit} className="bg-white rounded-xl border border-slate-200 p-5 mb-5 space-y-4">
+              <h2 className="text-sm font-semibold text-slate-700">Nova evolução</h2>
+              {soapError && (
+                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{soapError}</p>
+              )}
+              {(['subjective', 'objective', 'assessment', 'plan'] as const).map(field => (
+                <div key={field}>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{SOAP_LABELS[field]}</label>
+                  <textarea
+                    value={soapForm[field]}
+                    onChange={e => setSoapForm(f => ({ ...f, [field]: e.target.value }))}
+                    rows={3}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => { setShowSOAPForm(false); setSoapForm(emptySOAP); setSoapError(null); }}
+                  className="text-sm text-slate-600 hover:text-slate-800 px-4 py-2 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={soapSaving}
+                  className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                  {soapSaving ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {notesLoading ? (
+            <div className="py-12 text-center text-slate-400 text-sm">Carregando…</div>
+          ) : notes.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+              <p className="text-slate-400 text-sm">Nenhuma evolução registrada.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {notes.map(note => (
+                <div key={note.id} className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+                  <div className="px-5 py-3">
+                    <span className="text-xs font-semibold text-slate-500">{formatDate(note.date)}</span>
+                  </div>
+                  {(['subjective', 'objective', 'assessment', 'plan'] as const)
+                    .filter(f => note[f])
+                    .map(field => (
+                      <div key={field} className="px-5 py-3">
+                        <p className="text-xs font-medium text-slate-500 mb-1">{SOAP_LABELS[field]}</p>
+                        <p className="text-sm text-slate-800 whitespace-pre-wrap">{note[field]}</p>
+                      </div>
+                    ))}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {showEdit && (
         <PatientModal
