@@ -92,9 +92,10 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     if (isEdit) return;
     const t = setTimeout(async () => {
       if (patientQuery.length < 2) { setPatients([]); return; }
-      // Owner with team: search across all practitioners (no practitionerId filter)
-      const practParam = selectedPractitionerId && practitioners.length <= 1
-        ? `&practitionerId=${selectedPractitionerId}`
+      // Owner with team: search across all team members' patients (?practitioners=all)
+      // Single practitioner: search own patients only
+      const practParam = practitioners.length > 1
+        ? '&practitioners=all'
         : '';
       const res = await fetch(`/api/patients?q=${encodeURIComponent(patientQuery)}${practParam}`);
       if (res.ok) setPatients(await res.json());
