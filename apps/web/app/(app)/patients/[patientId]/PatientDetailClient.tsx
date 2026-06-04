@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import type { HHPatient, HHAppointment } from '@hh/core';
 import { formatPhone, formatCPF, formatDate, formatTime, APPOINTMENT_STATUS_LABELS } from '@hh/core';
 import type { SOAPNote } from '@hh/fhir';
@@ -63,10 +63,17 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
     }
   }, [patient.id]);
 
+  const loaded = useRef({ consultas: false, evolucoes: false });
   useEffect(() => {
-    if (tab === 'consultas' && appointments.length === 0 && !apptLoading) loadAppointments();
-    if (tab === 'evolucoes' && notes.length === 0 && !notesLoading) loadNotes();
-  }, [tab]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (tab === 'consultas' && !loaded.current.consultas) {
+      loaded.current.consultas = true;
+      loadAppointments();
+    }
+    if (tab === 'evolucoes' && !loaded.current.evolucoes) {
+      loaded.current.evolucoes = true;
+      loadNotes();
+    }
+  }, [tab, loadAppointments, loadNotes]);
 
   async function handleSOAPSubmit(e: React.FormEvent) {
     e.preventDefault();
