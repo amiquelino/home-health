@@ -3,9 +3,13 @@
 import { useState, useEffect } from 'react';
 import type { HHAppointment, HHPatient, PaymentStatus } from '@hh/core';
 
+interface TeamMember { id: string; name: string; }
+
 interface Props {
   initial?: { date: string; time: string };
   appointment?: HHAppointment;
+  practitioners?: TeamMember[];
+  defaultPractitionerId?: string;
   onClose: () => void;
   onSaved: (appt: HHAppointment) => void;
 }
@@ -28,12 +32,22 @@ function formatBRL(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-export function AppointmentModal({ initial, appointment, onClose, onSaved }: Props) {
+export function AppointmentModal({ initial, appointment, practitioners = [], defaultPractitionerId, onClose, onSaved }: Props) {
   const isEdit = !!appointment;
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [patients, setPatients] = useState<HHPatient[]>([]);
   const [patientQuery, setPatientQuery] = useState('');
+  const [selectedPractitionerId, setSelectedPractitionerId] = useState(
+    defaultPractitionerId ?? (practitioners[0]?.id ?? '')
+  );
+
+  // Sync when practitioners list loads after initial render
+  useEffect(() => {
+    if (!selectedPractitionerId && practitioners.length > 0) {
+      setSelectedPractitionerId(defaultPractitionerId ?? practitioners[0].id);
+    }
+  }, [practitioners, defaultPractitionerId, selectedPractitionerId]);
   const [whatsappLoading, setWhatsappLoading] = useState(false);
   const [pixLoading, setPixLoading] = useState(false);
   const [pixResult, setPixResult] = useState<{ pixCopiaECola: string; invoiceUrl: string } | null>(null);
@@ -78,11 +92,15 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
     if (isEdit) return;
     const t = setTimeout(async () => {
       if (patientQuery.length < 2) { setPatients([]); return; }
-      const res = await fetch(`/api/patients?q=${encodeURIComponent(patientQuery)}`);
+      // Owner with team: search across all practitioners (no practitionerId filter)
+      const practParam = selectedPractitionerId && practitioners.length <= 1
+        ? `&practitionerId=${selectedPractitionerId}`
+        : '';
+      const res = await fetch(`/api/patients?q=${encodeURIComponent(patientQuery)}${practParam}`);
       if (res.ok) setPatients(await res.json());
     }, 300);
     return () => clearTimeout(t);
-  }, [patientQuery, isEdit]);
+  }, [patientQuery, isEdit, selectedPractitionerId]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -97,6 +115,7 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
       const url = isEdit ? `/api/appointments/${appointment!.id}` : '/api/appointments';
       const method = isEdit ? 'PATCH' : 'POST';
 
+      const selectedPract = practitioners.find(p => p.id === selectedPractitionerId);
       const body: Record<string, unknown> = {
         patientId: form.patientId,
         patientName: form.patientName,
@@ -105,6 +124,8 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
         notes: form.notes,
         isHomeVisit: form.isHomeVisit,
         homeVisitAddress: form.homeVisitAddress,
+        ...(selectedPractitionerId && { practitionerId: selectedPractitionerId }),
+        ...(selectedPract && { practitionerName: selectedPract.name }),
       };
 
       if (isEdit) {
@@ -254,6 +275,22 @@ export function AppointmentModal({ initial, appointment, onClose, onSaved }: Pro
             <div className="rounded-lg bg-slate-50 border border-slate-200 px-3 py-2">
               <p className="text-xs text-slate-500">Paciente</p>
               <p className="text-sm font-medium text-slate-900">{appointment.patientName}</p>
+            </div>
+          )}
+
+          {/* Practitioner selector (new appointment + owner with team) */}
+          {!isEdit && practitioners.length > 1 && (
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Profissional</label>
+              <select
+                value={selectedPractitionerId}
+                onChange={e => { setSelectedPractitionerId(e.target.value); set('patientId', ''); set('patientName', ''); setPatientQuery(''); setPatients([]); }}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+              >
+                {practitioners.map(p => (
+                  <option key={p.id} value={p.id}>{p.name}</option>
+                ))}
+              </select>
             </div>
           )}
 
