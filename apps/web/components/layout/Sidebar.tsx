@@ -12,7 +12,7 @@ const nav: { href: string; label: string; icon: string; feature?: PlanFeature; o
   { href: '/notes',          label: 'Evoluções',      icon: '📝' },
   { href: '/billing',        label: 'Financeiro',     icon: '💳', feature: 'financeiro' },
   { href: '/settings/team',  label: 'Equipe',         icon: '👤', feature: 'equipe', ownerOnly: true },
-  { href: '/settings',       label: 'Configurações',  icon: '⚙️' },
+  { href: '/settings/profile', label: 'Configurações', icon: '⚙️' },
 ];
 
 interface Props {
@@ -46,7 +46,7 @@ export function Sidebar({ subscriptionPlan = 'starter', accessStatus = 'trial', 
         <nav className="flex-1 space-y-1">
           {nav.map((item) => {
             if (item.ownerOnly && role !== 'owner') return null;
-            const active = pathname === item.href || (item.href !== '/settings' && pathname.startsWith(item.href));
+            const active = pathname === item.href || pathname.startsWith(item.href + '/')  || (item.href === '/settings/profile' && pathname.startsWith('/settings'));
             const allowed = hasFeature(item.feature ?? 'agenda', subscriptionPlan, status) || !item.feature;
             if (!allowed) {
               return (
