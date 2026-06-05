@@ -1,0 +1,61 @@
+# Production stack: Medplum server + PostgreSQL + Redis
+# Deploy via Coolify — set environment variables in the Coolify dashboard.
+# Usage: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  postgres:
+    image: postgres:16
+    restart: always
+    environment:
+      POSTGRES_USER: medplum
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: medplum
+    volumes:
+      - ./postgres/postgres.conf:/usr/local/etc/postgres/postgres.conf
+      - ./postgres/:/docker-entrypoint-initdb.d/
+      - medplum-postgres-data:/var/lib/postgresql/data
+    command: postgres -c config_file=/usr/local/etc/postgres/postgres.conf
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U medplum"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    volumes:
+      - medplum-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  medplum:
+    image: medplum/medplum-server:latest
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      - MEDPLUM_DATABASE_HOST=postgres
+      - MEDPLUM_DATABASE_PORT=5432
+      - MEDPLUM_DATABASE_DBNAME=medplum
+      - MEDPLUM_DATABASE_USERNAME=medplum
+      - MEDPLUM_DATABASE_PASSWORD=${POSTGRES_PASSWORD}
+      - MEDPLUM_REDIS_HOST=redis
+      - MEDPLUM_REDIS_PORT=6379
+      - MEDPLUM_REDIS_PASSWORD=${REDIS_PASSWORD}
+      - MEDPLUM_BASE_URL=${MEDPLUM_BASE_URL}
+      - MEDPLUM_APP_BASE_URL=${MEDPLUM_BASE_URL}
+      - MEDPLUM_STORAGE_BUCKET=medplum-storage
+    ports:
+      - "8103:8103"
+
+volumes:
+  medplum-postgres-data:
+  medplum-redis-data:

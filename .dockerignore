@@ -6,3 +6,7 @@
 Dockerfile
 docker-compose.yml
 node_modules
+**/.next
+**/.next-internal
+**/node_modules
+apps/web/dev.sh
