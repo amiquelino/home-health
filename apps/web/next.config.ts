@@ -2,7 +2,6 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // WSL2: webpack (--no-turbopack) is used for dev to avoid NTFS chunk truncation.
   watchOptions: {
     pollIntervalMs: 1000,
   },

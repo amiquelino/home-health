@@ -1,5 +1,5 @@
 #!/bin/bash
-# WSL2 dev server — uses webpack (--no-turbopack) to avoid NTFS chunk truncation bugs.
+# WSL2 dev server restart — clears Turbopack cache before starting.
 set -e
 
 pkill -f "next dev" 2>/dev/null || true
