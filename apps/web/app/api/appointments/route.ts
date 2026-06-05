@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { withAuth } from '@/lib/with-auth';
-import { fhirSearch, fhirCreate } from '@/lib/medplum-client';
-import { toFHIRAppointment, fromFHIRAppointment } from '@hh/fhir';
+import { fhirSearch, fhirCreate, fhirGet } from '@/lib/medplum-client';
+import { toFHIRAppointment, fromFHIRAppointment, getExtension } from '@hh/fhir';
 import { HH_EXT } from '@hh/fhir';
 import type { Appointment, Practitioner } from '@medplum/fhirtypes';
 
@@ -91,6 +91,14 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     practitionerName = body.practitionerName ?? '';
   }
 
+  // Read default price from the practitioner's profile
+  let defaultPrice: number | undefined;
+  try {
+    const pract = await fhirGet<Practitioner>('Practitioner', practitionerId, session.user.projectId);
+    const raw = getExtension(pract, 'DEFAULT_PRICE');
+    if (raw) defaultPrice = parseFloat(raw);
+  } catch { /* non-fatal */ }
+
   const fhir = toFHIRAppointment({
     id: '',
     patientId,
@@ -103,6 +111,7 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     notes,
     isHomeVisit,
     homeVisitAddress,
+    price: defaultPrice,
   });
 
   const created = await fhirCreate<Appointment>('Appointment', fhir, session.user.projectId);
