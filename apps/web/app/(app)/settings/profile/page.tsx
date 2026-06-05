@@ -18,13 +18,18 @@ const CREDENTIAL_LABEL: Record<string, string> = {
   outro:                   'Nº de Registro',
 };
 
+function formatBRL(value: number) {
+  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
 export default function ProfilePage() {
   const [form, setForm] = useState({
     name: '',
     specialty: '' as Specialty | '',
     professionalId: '',
-    defaultPrice: '',
+    defaultPrice: null as number | null,
   });
+  const [priceDisplay, setPriceDisplay] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -34,17 +39,19 @@ export default function ProfilePage() {
     fetch('/api/settings/profile')
       .then(r => r.json())
       .then(data => {
+        const price = data.defaultPrice != null ? parseFloat(data.defaultPrice) : null;
         setForm({
           name: data.name ?? '',
           specialty: data.specialty ?? '',
           professionalId: data.professionalId ?? '',
-          defaultPrice: data.defaultPrice != null ? String(data.defaultPrice) : '',
+          defaultPrice: price,
         });
+        if (price != null) setPriceDisplay(formatBRL(price));
       })
       .finally(() => setLoading(false));
   }, []);
 
-  function set(field: string, value: string) {
+  function set(field: string, value: string | null) {
     setForm(f => ({ ...f, [field]: value }));
   }
 
@@ -61,7 +68,7 @@ export default function ProfilePage() {
           name: form.name,
           specialty: form.specialty || null,
           professionalId: form.professionalId || null,
-          defaultPrice: form.defaultPrice ? parseFloat(form.defaultPrice) : null,
+          defaultPrice: form.defaultPrice,
         }),
       });
       const data = await res.json();
@@ -120,14 +127,19 @@ export default function ProfilePage() {
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">Valor padrão da consulta (R$)</label>
+          <label className="block text-sm font-medium text-slate-700 mb-1">Valor padrão da consulta</label>
           <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={form.defaultPrice}
-            onChange={e => set('defaultPrice', e.target.value)}
-            placeholder="Ex: 150.00"
+            type="text"
+            inputMode="numeric"
+            value={priceDisplay}
+            onChange={e => {
+              const digits = e.target.value.replace(/\D/g, '');
+              const cents = parseInt(digits || '0', 10);
+              const brl = cents / 100;
+              setPriceDisplay(cents === 0 ? '' : formatBRL(brl));
+              setForm(f => ({ ...f, defaultPrice: cents === 0 ? null : brl }));
+            }}
+            placeholder="R$ 0,00"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500"
           />
           <p className="text-xs text-slate-400 mt-1">Preenchido automaticamente ao criar novos agendamentos.</p>
