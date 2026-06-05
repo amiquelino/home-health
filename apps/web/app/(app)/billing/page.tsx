@@ -16,5 +16,5 @@ export default async function BillingPage() {
     redirect('/subscribe?feature=financeiro');
   }
 
-  return <BillingClient />;
+  return <BillingClient isOwner={session.user.role === 'owner'} />;
 }
