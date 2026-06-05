@@ -63,8 +63,6 @@ export default function SettingsPage() {
 
   return (
     <div className="max-w-xl">
-      <h1 className="text-xl font-bold text-slate-900 mb-6">Configurações</h1>
-
       {isSetup && (
         <div className="mb-6 rounded-xl bg-sky-50 border border-sky-200 px-4 py-3 text-sm text-sky-700">
           Quase lá! Configure seu provedor de pagamento para gerar cobranças PIX para os pacientes.
