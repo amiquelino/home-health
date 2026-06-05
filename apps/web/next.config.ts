@@ -2,9 +2,9 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
-  // WSL2: move .next to Linux filesystem — Turbopack cache fails on NTFS (/mnt/c/)
-  distDir: "/tmp/hh-next",
   // WSL2: poll filesystem because inotify doesn't work on /mnt/c/
+  // Note: .next is symlinked to /tmp/hh-next (Linux ext4) to avoid NTFS truncation bugs.
+  // Run: ln -sfn /tmp/hh-next /mnt/c/home-health/apps/web/.next before starting dev.
   watchOptions: {
     pollIntervalMs: 1000,
   },
