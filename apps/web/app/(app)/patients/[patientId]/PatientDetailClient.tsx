@@ -3,11 +3,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { HHPatient, HHAppointment } from '@hh/core';
 import { formatPhone, formatCPF, formatDate, formatTime, APPOINTMENT_STATUS_LABELS } from '@hh/core';
-import type { SOAPNote } from '@hh/fhir';
+import type { SOAPNote, AnamnesisNote } from '@hh/fhir';
 import { PatientModal } from '@/components/patients/PatientModal';
 import Link from 'next/link';
 
-type Tab = 'dados' | 'consultas' | 'evolucoes';
+type Tab = 'dados' | 'consultas' | 'avaliacoes' | 'evolucoes';
 
 const STATUS_BADGE: Record<string, string> = {
   scheduled:  'bg-sky-100 text-sky-700',
@@ -24,7 +24,15 @@ const SOAP_LABELS = {
   plan:       'P — Plano',
 } as const;
 
+const ANAMNESIS_LABELS = {
+  chiefComplaint: 'Queixa principal',
+  presentIllness: 'História da doença atual',
+  pastHistory:    'História patológica pregressa',
+  objective:      'Objetivo',
+} as const;
+
 const emptySOAP = { subjective: '', objective: '', assessment: '', plan: '' };
+const emptyAnamnesis = { chiefComplaint: '', presentIllness: '', pastHistory: '', objective: '' };
 
 export function PatientDetailClient({ patient: initial }: { patient: HHPatient }) {
   const [patient, setPatient] = useState(initial);
@@ -35,13 +43,21 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
   const [appointments, setAppointments] = useState<HHAppointment[]>([]);
   const [apptLoading, setApptLoading] = useState(false);
 
-  // SOAP notes
+  // SOAP notes (evoluções)
   const [notes, setNotes] = useState<SOAPNote[]>([]);
   const [notesLoading, setNotesLoading] = useState(false);
   const [showSOAPForm, setShowSOAPForm] = useState(false);
   const [soapForm, setSoapForm] = useState(emptySOAP);
   const [soapSaving, setSoapSaving] = useState(false);
   const [soapError, setSoapError] = useState<string | null>(null);
+
+  // Anamnesis notes (avaliações)
+  const [anamneses, setAnamneses] = useState<AnamnesisNote[]>([]);
+  const [anamnesisLoading, setAnamnesisLoading] = useState(false);
+  const [showAnamnesisForm, setShowAnamnesisForm] = useState(false);
+  const [anamnesisForm, setAnamnesisForm] = useState(emptyAnamnesis);
+  const [anamnesisSaving, setAnamnesisSaving] = useState(false);
+  const [anamnesisError, setAnamnesisError] = useState<string | null>(null);
 
   const loadAppointments = useCallback(async () => {
     setApptLoading(true);
@@ -63,17 +79,31 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
     }
   }, [patient.id]);
 
-  const loaded = useRef({ consultas: false, evolucoes: false });
+  const loadAnamneses = useCallback(async () => {
+    setAnamnesisLoading(true);
+    try {
+      const res = await fetch(`/api/anamnesis?patientId=${patient.id}`);
+      if (res.ok) setAnamneses(await res.json());
+    } finally {
+      setAnamnesisLoading(false);
+    }
+  }, [patient.id]);
+
+  const loaded = useRef({ consultas: false, avaliacoes: false, evolucoes: false });
   useEffect(() => {
     if (tab === 'consultas' && !loaded.current.consultas) {
       loaded.current.consultas = true;
       loadAppointments();
     }
+    if (tab === 'avaliacoes' && !loaded.current.avaliacoes) {
+      loaded.current.avaliacoes = true;
+      loadAnamneses();
+    }
     if (tab === 'evolucoes' && !loaded.current.evolucoes) {
       loaded.current.evolucoes = true;
       loadNotes();
     }
-  }, [tab, loadAppointments, loadNotes]);
+  }, [tab, loadAppointments, loadAnamneses, loadNotes]);
 
   async function handleSOAPSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -95,6 +125,29 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
       await loadNotes();
     } finally {
       setSoapSaving(false);
+    }
+  }
+
+  async function handleAnamnesisSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setAnamnesisSaving(true);
+    setAnamnesisError(null);
+    try {
+      const res = await fetch('/api/anamnesis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patientId: patient.id, ...anamnesisForm }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        setAnamnesisError(data.error ?? 'Erro ao salvar avaliação');
+        return;
+      }
+      setAnamnesisForm(emptyAnamnesis);
+      setShowAnamnesisForm(false);
+      await loadAnamneses();
+    } finally {
+      setAnamnesisSaving(false);
     }
   }
 
@@ -137,9 +190,10 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
       {/* Tabs */}
       <div className="flex gap-1 border-b border-slate-200 mb-5">
         {([
-          { key: 'dados',     label: 'Dados' },
-          { key: 'consultas', label: 'Consultas' },
-          { key: 'evolucoes', label: 'Evoluções' },
+          { key: 'dados',      label: 'Dados' },
+          { key: 'consultas',  label: 'Consultas' },
+          { key: 'avaliacoes', label: 'Avaliações' },
+          { key: 'evolucoes',  label: 'Evoluções' },
         ] as { key: Tab; label: string }[]).map(t => (
           <button
             key={t.key}
@@ -213,6 +267,78 @@ export function PatientDetailClient({ patient: initial }: { patient: HHPatient }
                       {APPOINTMENT_STATUS_LABELS[a.status as keyof typeof APPOINTMENT_STATUS_LABELS] ?? a.status}
                     </span>
                   </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Avaliações ── */}
+      {tab === 'avaliacoes' && (
+        <div>
+          <div className="flex items-center justify-between mb-4">
+            {!showAnamnesisForm && (
+              <button
+                onClick={() => setShowAnamnesisForm(true)}
+                className="ml-auto bg-sky-600 hover:bg-sky-700 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                + Nova avaliação
+              </button>
+            )}
+          </div>
+
+          {showAnamnesisForm && (
+            <form onSubmit={handleAnamnesisSubmit} className="bg-white rounded-xl border border-slate-200 p-5 mb-5 space-y-4">
+              <h2 className="text-sm font-semibold text-slate-700">Nova avaliação</h2>
+              {anamnesisError && (
+                <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{anamnesisError}</p>
+              )}
+              {(['chiefComplaint', 'presentIllness', 'pastHistory', 'objective'] as const).map(field => (
+                <div key={field}>
+                  <label className="block text-xs font-medium text-slate-500 mb-1">{ANAMNESIS_LABELS[field]}</label>
+                  <textarea
+                    value={anamnesisForm[field]}
+                    onChange={e => setAnamnesisForm(f => ({ ...f, [field]: e.target.value }))}
+                    rows={3}
+                    className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 resize-none"
+                  />
+                </div>
+              ))}
+              <div className="flex gap-2 justify-end">
+                <button type="button" onClick={() => { setShowAnamnesisForm(false); setAnamnesisForm(emptyAnamnesis); setAnamnesisError(null); }}
+                  className="text-sm text-slate-600 hover:text-slate-800 px-4 py-2 transition-colors">
+                  Cancelar
+                </button>
+                <button type="submit" disabled={anamnesisSaving}
+                  className="bg-sky-600 hover:bg-sky-700 disabled:opacity-50 text-white text-sm font-medium px-4 py-2 rounded-lg transition-colors">
+                  {anamnesisSaving ? 'Salvando…' : 'Salvar'}
+                </button>
+              </div>
+            </form>
+          )}
+
+          {anamnesisLoading ? (
+            <div className="py-12 text-center text-slate-400 text-sm">Carregando…</div>
+          ) : anamneses.length === 0 ? (
+            <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
+              <p className="text-slate-400 text-sm">Nenhuma avaliação registrada.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {anamneses.map(note => (
+                <div key={note.id} className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-100">
+                  <div className="px-5 py-3">
+                    <span className="text-xs font-semibold text-slate-500">{formatDate(note.date)}</span>
+                  </div>
+                  {(['chiefComplaint', 'presentIllness', 'pastHistory', 'objective'] as const)
+                    .filter(f => note[f])
+                    .map(field => (
+                      <div key={field} className="px-5 py-3">
+                        <p className="text-xs font-medium text-slate-500 mb-1">{ANAMNESIS_LABELS[field]}</p>
+                        <p className="text-sm text-slate-800 whitespace-pre-wrap">{note[field]}</p>
+                      </div>
+                    ))}
                 </div>
               ))}
             </div>

@@ -10,6 +10,7 @@ const nav: { href: string; label: string; icon: string; feature?: PlanFeature; o
   { href: '/schedule',       label: 'Agenda',         icon: '📅' },
   { href: '/patients',       label: 'Pacientes',      icon: '👥' },
   { href: '/notes',          label: 'Evoluções',      icon: '📝' },
+  { href: '/assessments',    label: 'Avaliações',     icon: '🩺' },
   { href: '/billing',        label: 'Financeiro',     icon: '💳', feature: 'financeiro' },
   { href: '/settings/team',  label: 'Equipe',         icon: '👤', feature: 'equipe', ownerOnly: true },
   { href: '/settings/profile', label: 'Configurações', icon: '⚙️' },

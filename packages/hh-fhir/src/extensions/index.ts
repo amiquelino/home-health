@@ -17,11 +17,20 @@ export const HH_EXT = {
   CHARGE_AMOUNT: `${BASE}/charge-amount`,
   PAYMENT_STATUS: `${BASE}/payment-status`,
 
-  // SOAP note (on ClinicalImpression)
+  // Clinical note type (on ClinicalImpression)
+  NOTE_TYPE: `${BASE}/note-type`,
+
+  // SOAP note (evoluções)
   SOAP_S: `${BASE}/soap-s`,
   SOAP_O: `${BASE}/soap-o`,
   SOAP_A: `${BASE}/soap-a`,
   SOAP_P: `${BASE}/soap-p`,
+
+  // Anamnese (avaliações)
+  ANAMNESIS_CC:  `${BASE}/anamnesis-chief-complaint`,
+  ANAMNESIS_HDA: `${BASE}/anamnesis-present-illness`,
+  ANAMNESIS_HPP: `${BASE}/anamnesis-past-history`,
+  ANAMNESIS_OBJ: `${BASE}/anamnesis-objective`,
 
   // Payment provider (per practitioner/clinic)
   PAYMENT_PROVIDER_TYPE: `${BASE}/payment-provider-type`,
