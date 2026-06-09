@@ -1,14 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { formatTime } from '@hh/core';
-
-const FinancialChart = dynamic(
-  () => import('./FinancialChart').then(m => m.FinancialChart),
-  { ssr: false },
-);
+import { FinancialChart } from './FinancialChart';
 
 interface TodayAppointment {
   id: string;

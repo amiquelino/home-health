@@ -1,13 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  Tooltip,
-  ResponsiveContainer,
-} from 'recharts';
 
 type Period = '3m' | '6m' | '12m';
 
@@ -23,30 +16,13 @@ function formatBRL(value: number) {
   return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
-interface TooltipProps {
-  active?: boolean;
-  payload?: Array<{ name: string; value: number; fill: string }>;
-  label?: string;
-}
-
-function CustomTooltip({ active, payload, label }: TooltipProps) {
-  if (!active || !payload?.length) return null;
-  return (
-    <div className="bg-white border border-slate-200 rounded-lg p-3 shadow-sm text-xs">
-      <p className="font-semibold text-slate-700 mb-1 capitalize">{label}</p>
-      {payload.map(entry => (
-        <p key={entry.name} style={{ color: entry.fill }}>
-          {entry.name === 'revenue' ? 'Recebido' : 'Pendente'}: {formatBRL(entry.value)}
-        </p>
-      ))}
-    </div>
-  );
-}
+const BAR_AREA = 120;
 
 export function FinancialChart() {
   const [period, setPeriod] = useState<Period>('6m');
   const [data, setData] = useState<MonthData[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tooltip, setTooltip] = useState<MonthData | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -55,6 +31,8 @@ export function FinancialChart() {
       .then(d => { if (d) setData(d.months); })
       .finally(() => setLoading(false));
   }, [period]);
+
+  const maxVal = data ? Math.max(...data.flatMap(d => [d.revenue, d.pending]), 1) : 1;
 
   return (
     <div className="bg-white rounded-xl border border-slate-200 p-4">
@@ -84,31 +62,62 @@ export function FinancialChart() {
           Nenhuma cobrança neste período.
         </div>
       ) : (
-        <>
-          <ResponsiveContainer width="100%" height={160}>
-            <BarChart data={data} barGap={2} barCategoryGap="35%">
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 11, fill: '#94a3b8' }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip content={<CustomTooltip />} cursor={{ fill: '#f1f5f9' }} />
-              <Bar dataKey="revenue" fill="#16a34a" radius={[3, 3, 0, 0]} />
-              <Bar dataKey="pending" fill="#fbbf24" radius={[3, 3, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-          <div className="flex gap-4 mt-2">
+        <div className="relative" onMouseLeave={() => setTooltip(null)}>
+          {tooltip && (
+            <div className="absolute top-0 left-1/2 -translate-x-1/2 z-10 bg-white border border-slate-200 rounded-lg px-3 py-2 shadow-sm text-xs pointer-events-none whitespace-nowrap">
+              <p className="font-semibold text-slate-700 mb-0.5 capitalize">{tooltip.label}</p>
+              {tooltip.revenue > 0 && (
+                <p className="text-green-700">Recebido: {formatBRL(tooltip.revenue)}</p>
+              )}
+              {tooltip.pending > 0 && (
+                <p className="text-amber-600">Pendente: {formatBRL(tooltip.pending)}</p>
+              )}
+              {tooltip.revenue === 0 && tooltip.pending === 0 && (
+                <p className="text-slate-400">Sem cobranças</p>
+              )}
+            </div>
+          )}
+
+          <div
+            className="flex items-end justify-around"
+            style={{ height: BAR_AREA + 28 }}
+          >
+            {data.map(d => {
+              const revH = d.revenue > 0 ? Math.max(Math.round((d.revenue / maxVal) * BAR_AREA), 4) : 0;
+              const penH = d.pending > 0 ? Math.max(Math.round((d.pending / maxVal) * BAR_AREA), 4) : 0;
+              return (
+                <div
+                  key={d.label}
+                  className="flex flex-col items-center flex-1 cursor-default group"
+                  onMouseEnter={() => setTooltip(d)}
+                >
+                  <div className="flex items-end gap-0.5" style={{ height: BAR_AREA }}>
+                    <div
+                      className="w-2.5 bg-green-600 rounded-t-sm group-hover:bg-green-500 transition-colors"
+                      style={{ height: revH || 0 }}
+                    />
+                    <div
+                      className="w-2.5 bg-amber-400 rounded-t-sm group-hover:bg-amber-300 transition-colors"
+                      style={{ height: penH || 0 }}
+                    />
+                  </div>
+                  <span className="text-[10px] text-slate-400 mt-1.5 capitalize select-none">{d.label}</span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="flex gap-4 mt-3 border-t border-slate-100 pt-3">
             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-green-600 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-sm bg-green-600 inline-block shrink-0" />
               Recebido
             </span>
             <span className="flex items-center gap-1.5 text-xs text-slate-500">
-              <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block" />
+              <span className="w-2.5 h-2.5 rounded-sm bg-amber-400 inline-block shrink-0" />
               Pendente
             </span>
           </div>
-        </>
+        </div>
       )}
     </div>
   );
