@@ -57,10 +57,10 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
   );
 
   const initDate = appointment
-    ? appointment.start.slice(0, 10)
-    : (initial?.date ?? new Date().toISOString().slice(0, 10));
+    ? (() => { const d = new Date(appointment.start); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()
+    : (initial?.date ?? (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })());
   const initTime = appointment
-    ? appointment.start.slice(11, 16)
+    ? (() => { const d = new Date(appointment.start); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()
     : (initial?.time ?? '09:00');
 
   const [form, setForm] = useState({
@@ -108,10 +108,10 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     setError('');
     setLoading(true);
     try {
-      const start = `${form.date}T${form.time}:00`;
-      const endDate = new Date(start);
-      endDate.setMinutes(endDate.getMinutes() + form.durationMinutes);
-      const end = endDate.toISOString().slice(0, 19);
+      const startDate = new Date(`${form.date}T${form.time}:00`);
+      const start = startDate.toISOString();
+      const endDate = new Date(startDate.getTime() + form.durationMinutes * 60_000);
+      const end = endDate.toISOString();
 
       const url = isEdit ? `/api/appointments/${appointment!.id}` : '/api/appointments';
       const method = isEdit ? 'PATCH' : 'POST';
