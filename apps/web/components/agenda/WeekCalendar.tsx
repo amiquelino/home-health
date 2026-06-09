@@ -41,10 +41,7 @@ function addDays(date: Date, n: number): Date {
 }
 
 function fmtDateParam(d: Date) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
 }
 
 export function WeekCalendar({ isOwner = false }: { isOwner?: boolean }) {

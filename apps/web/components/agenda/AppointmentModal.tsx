@@ -56,12 +56,13 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     appointment?.price ? formatBRL(appointment.price) : ''
   );
 
-  const initDate = appointment
-    ? (() => { const d = new Date(appointment.start); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })()
-    : (initial?.date ?? (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })());
-  const initTime = appointment
-    ? (() => { const d = new Date(appointment.start); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; })()
-    : (initial?.time ?? '09:00');
+  const brDate = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+  const brTime = (d: Date) =>
+    new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
+
+  const initDate = appointment ? brDate(new Date(appointment.start)) : (initial?.date ?? brDate(new Date()));
+  const initTime = appointment ? brTime(new Date(appointment.start)) : (initial?.time ?? '09:00');
 
   const [form, setForm] = useState({
     patientId: appointment?.patientId ?? '',
@@ -108,10 +109,8 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     setError('');
     setLoading(true);
     try {
-      const startDate = new Date(`${form.date}T${form.time}:00`);
-      const start = startDate.toISOString();
-      const endDate = new Date(startDate.getTime() + form.durationMinutes * 60_000);
-      const end = endDate.toISOString();
+      const start = `${form.date}T${form.time}:00-03:00`;
+      const end = new Date(new Date(start).getTime() + form.durationMinutes * 60_000).toISOString();
 
       const url = isEdit ? `/api/appointments/${appointment!.id}` : '/api/appointments';
       const method = isEdit ? 'PATCH' : 'POST';
