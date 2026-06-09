@@ -128,11 +128,9 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
         ...(selectedPract && { practitionerName: selectedPract.name }),
       };
 
-      if (isEdit) {
-        const priceNum = form.price !== '' ? parseFloat(String(form.price)) : undefined;
-        if (priceNum !== undefined && !isNaN(priceNum)) body.price = priceNum;
-        body.paymentStatus = form.paymentStatus;
-      }
+      const priceNum = form.price !== '' ? parseFloat(String(form.price)) : undefined;
+      if (priceNum !== undefined && !isNaN(priceNum)) body.price = priceNum;
+      if (isEdit) body.paymentStatus = form.paymentStatus;
 
       const res = await fetch(url, {
         method,

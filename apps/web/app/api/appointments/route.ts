@@ -92,12 +92,14 @@ export const POST = withAuth(async (req: NextRequest, session) => {
   }
 
   // Read default price from the practitioner's profile
-  let defaultPrice: number | undefined;
-  try {
-    const pract = await fhirGet<Practitioner>('Practitioner', practitionerId, session.user.projectId);
-    const raw = getExtension(pract, 'DEFAULT_PRICE');
-    if (raw) defaultPrice = parseFloat(raw);
-  } catch { /* non-fatal */ }
+  let finalPrice: number | undefined = body.price !== undefined ? parseFloat(String(body.price)) : undefined;
+  if (finalPrice === undefined || isNaN(finalPrice)) {
+    try {
+      const pract = await fhirGet<Practitioner>('Practitioner', practitionerId, session.user.projectId);
+      const raw = getExtension(pract, 'DEFAULT_PRICE');
+      if (raw) finalPrice = parseFloat(raw);
+    } catch { /* non-fatal */ }
+  }
 
   const fhir = toFHIRAppointment({
     id: '',
@@ -111,7 +113,8 @@ export const POST = withAuth(async (req: NextRequest, session) => {
     notes,
     isHomeVisit,
     homeVisitAddress,
-    price: defaultPrice,
+    price: finalPrice,
+    paymentStatus: finalPrice !== undefined ? 'pending' : undefined,
   });
 
   const created = await fhirCreate<Appointment>('Appointment', fhir, session.user.projectId);
