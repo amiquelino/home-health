@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { formatTime } from '@hh/core';
+import { FinancialChart } from './FinancialChart';
 
 interface TodayAppointment {
   id: string;
@@ -97,6 +98,9 @@ export default function HomePage() {
           <p className="text-2xl font-bold text-slate-900">{loading ? '…' : data?.patientCount ?? 0}</p>
         </div>
       </div>
+
+      {/* Financial chart */}
+      <FinancialChart />
 
       {/* Next appointment highlight */}
       {!loading && data?.nextAppointment && (

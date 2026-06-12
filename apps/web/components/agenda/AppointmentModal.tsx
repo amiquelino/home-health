@@ -56,12 +56,13 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     appointment?.price ? formatBRL(appointment.price) : ''
   );
 
-  const initDate = appointment
-    ? appointment.start.slice(0, 10)
-    : (initial?.date ?? new Date().toISOString().slice(0, 10));
-  const initTime = appointment
-    ? appointment.start.slice(11, 16)
-    : (initial?.time ?? '09:00');
+  const brDate = (d: Date) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
+  const brTime = (d: Date) =>
+    new Intl.DateTimeFormat('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'America/Sao_Paulo' }).format(d);
+
+  const initDate = appointment ? brDate(new Date(appointment.start)) : (initial?.date ?? brDate(new Date()));
+  const initTime = appointment ? brTime(new Date(appointment.start)) : (initial?.time ?? '09:00');
 
   const [form, setForm] = useState({
     patientId: appointment?.patientId ?? '',
@@ -108,10 +109,8 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
     setError('');
     setLoading(true);
     try {
-      const start = `${form.date}T${form.time}:00`;
-      const endDate = new Date(start);
-      endDate.setMinutes(endDate.getMinutes() + form.durationMinutes);
-      const end = endDate.toISOString().slice(0, 19);
+      const start = `${form.date}T${form.time}:00-03:00`;
+      const end = new Date(new Date(start).getTime() + form.durationMinutes * 60_000).toISOString();
 
       const url = isEdit ? `/api/appointments/${appointment!.id}` : '/api/appointments';
       const method = isEdit ? 'PATCH' : 'POST';
@@ -129,11 +128,9 @@ export function AppointmentModal({ initial, appointment, practitioners = [], def
         ...(selectedPract && { practitionerName: selectedPract.name }),
       };
 
-      if (isEdit) {
-        const priceNum = form.price !== '' ? parseFloat(String(form.price)) : undefined;
-        if (priceNum !== undefined && !isNaN(priceNum)) body.price = priceNum;
-        body.paymentStatus = form.paymentStatus;
-      }
+      const priceNum = form.price !== '' ? parseFloat(String(form.price)) : undefined;
+      if (priceNum !== undefined && !isNaN(priceNum)) body.price = priceNum;
+      if (isEdit) body.paymentStatus = form.paymentStatus;
 
       const res = await fetch(url, {
         method,

@@ -16,14 +16,16 @@ export function formatCurrency(cents: number): string {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cents / 100);
 }
 
+const TZ = 'America/Sao_Paulo';
+
 export function formatDate(date: string | Date): string {
-  return new Intl.DateTimeFormat('pt-BR').format(new Date(date));
+  return new Intl.DateTimeFormat('pt-BR', { timeZone: TZ }).format(new Date(date));
 }
 
 export function formatDateTime(date: string | Date): string {
-  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short' }).format(new Date(date));
+  return new Intl.DateTimeFormat('pt-BR', { dateStyle: 'short', timeStyle: 'short', timeZone: TZ }).format(new Date(date));
 }
 
 export function formatTime(date: string | Date): string {
-  return new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short' }).format(new Date(date));
+  return new Intl.DateTimeFormat('pt-BR', { timeStyle: 'short', timeZone: TZ }).format(new Date(date));
 }

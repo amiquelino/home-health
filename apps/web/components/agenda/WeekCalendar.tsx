@@ -41,7 +41,7 @@ function addDays(date: Date, n: number): Date {
 }
 
 function fmtDateParam(d: Date) {
-  return d.toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d);
 }
 
 export function WeekCalendar({ isOwner = false }: { isOwner?: boolean }) {
