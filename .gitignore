@@ -109,6 +109,7 @@ terraform.rc
 test-results/
 playwright-report/
 playwright/.cache/
+apps/web/e2e/.auth/
 
 # Cursor
 .cursor/
