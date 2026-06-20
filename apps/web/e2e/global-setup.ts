@@ -1,17 +1,10 @@
 import { createServer, type Server } from 'node:http';
 import { encode } from 'next-auth/jwt';
-import { writeFile, mkdir, readFile } from 'node:fs/promises';
+import { writeFile, mkdir } from 'node:fs/promises';
 
-// Read AUTH_SECRET: env var first (CI), then .env.local (local dev)
-async function getAuthSecret(): Promise<string> {
-  if (process.env.AUTH_SECRET) return process.env.AUTH_SECRET;
-  try {
-    const content = await readFile('.env.local', 'utf-8');
-    const match = content.match(/^AUTH_SECRET=(.+)$/m);
-    if (match) return match[1].trim();
-  } catch {}
-  return 'test-e2e-auth-secret-minimum-32ch';
-}
+// AUTH_SECRET is resolved by playwright.config.ts (same process) and written to
+// process.env before global-setup runs, so it always matches the webServer's value.
+const AUTH_SECRET = process.env.AUTH_SECRET as string;
 
 function startMedplumMock(): Promise<Server> {
   return new Promise((resolve) => {
@@ -60,7 +53,6 @@ async function warmupSSRRoutes(sessionCookie: string) {
 }
 
 export default async function globalSetup() {
-  const AUTH_SECRET = await getAuthSecret();
   const mockServer = await startMedplumMock();
 
   // Salt must match the cookie name NextAuth uses to verify the token

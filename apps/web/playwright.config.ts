@@ -1,4 +1,21 @@
 import { defineConfig } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+// Resolve AUTH_SECRET once: shell env → .env.local → hardcoded fallback.
+// Written back to process.env so global-setup (same process) reads the same value.
+function resolveAuthSecret(): string {
+  if (process.env.AUTH_SECRET) return process.env.AUTH_SECRET;
+  try {
+    const content = readFileSync(join(__dirname, '.env.local'), 'utf-8');
+    const m = content.match(/^AUTH_SECRET=(.+)$/m);
+    if (m) return m[1].trim();
+  } catch {}
+  return 'test-e2e-auth-secret-minimum-32ch';
+}
+
+const AUTH_SECRET = resolveAuthSecret();
+process.env.AUTH_SECRET = AUTH_SECRET;
 
 export default defineConfig({
   testDir: './e2e',
@@ -36,8 +53,7 @@ export default defineConfig({
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
-      // AUTH_SECRET: inherited from process.env (set in CI step env, or read from
-      // .env.local by the existing dev server when reuseExistingServer=true locally)
+      AUTH_SECRET,
       AUTH_TRUST_HOST: 'true',
       NEXTAUTH_URL: 'http://localhost:3000',
       MEDPLUM_BASE_URL: process.env.MEDPLUM_BASE_URL ?? 'http://localhost:8103/',
