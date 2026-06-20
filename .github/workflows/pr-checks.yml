@@ -70,11 +70,17 @@ jobs:
           MEDPLUM_CLIENT_SECRET: test
           MEDPLUM_PROJECT_ID: test
 
+      - name: Prepare standalone server
+        run: |
+          cp -r apps/web/.next/static apps/web/.next/standalone/.next/static
+          cp -r apps/web/public apps/web/.next/standalone/public 2>/dev/null || true
+
       - name: Run E2E tests
         run: npm run test:e2e --workspace=@hh/web
         env:
           CI: true
           AUTH_SECRET: test-e2e-auth-secret-minimum-32ch
+          AUTH_TRUST_HOST: 'true'
           NEXTAUTH_URL: http://localhost:3000
           MEDPLUM_BASE_URL: http://localhost:8103/
           MEDPLUM_CLIENT_ID: test

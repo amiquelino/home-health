@@ -28,12 +28,17 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run start',
+    // next.config.ts uses output:'standalone', so 'next start' is a no-op.
+    // Use the standalone server directly. Static assets must be copied alongside
+    // before this runs (done in CI by the "Prepare standalone server" step).
+    command: 'node .next/standalone/server.js',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
     env: {
-      // AUTH_SECRET is read from .env.local (local) or inherited from CI process.env
+      // AUTH_SECRET: inherited from process.env (set in CI step env, or read from
+      // .env.local by the existing dev server when reuseExistingServer=true locally)
+      AUTH_TRUST_HOST: 'true',
       NEXTAUTH_URL: 'http://localhost:3000',
       MEDPLUM_BASE_URL: process.env.MEDPLUM_BASE_URL ?? 'http://localhost:8103/',
       MEDPLUM_CLIENT_ID: process.env.MEDPLUM_CLIENT_ID ?? 'test',
