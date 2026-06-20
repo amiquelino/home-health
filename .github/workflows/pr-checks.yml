@@ -72,9 +72,9 @@ jobs:
 
       - name: Prepare standalone server
         run: |
-          mkdir -p apps/web/.next/standalone/.next
-          cp -r apps/web/.next/static apps/web/.next/standalone/.next/
-          cp -r apps/web/public apps/web/.next/standalone/public 2>/dev/null || true
+          mkdir -p apps/web/.next/standalone/apps/web/.next
+          cp -r apps/web/.next/static apps/web/.next/standalone/apps/web/.next/
+          cp -r apps/web/public apps/web/.next/standalone/apps/web/public 2>/dev/null || true
 
       - name: Run E2E tests
         run: npm run test:e2e --workspace=@hh/web

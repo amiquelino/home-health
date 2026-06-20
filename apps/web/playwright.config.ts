@@ -29,9 +29,9 @@ export default defineConfig({
   ],
   webServer: {
     // next.config.ts uses output:'standalone', so 'next start' is a no-op.
-    // Use the standalone server directly. Static assets must be copied alongside
-    // before this runs (done in CI by the "Prepare standalone server" step).
-    command: 'node .next/standalone/server.js',
+    // In a monorepo the standalone entry point mirrors the workspace path.
+    // Static assets must be copied alongside before this runs (CI step).
+    command: 'node .next/standalone/apps/web/server.js',
     url: 'http://localhost:3000',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
