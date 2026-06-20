@@ -6,6 +6,14 @@ import { authConfig } from './auth.config';
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  logger: {
+    // CredentialsSignin means the user typed a wrong password — a user event, not a system error.
+    // Suppress it to keep logs clean; real auth errors (network, config) still surface.
+    error: (error) => {
+      if (error.name === 'CredentialsSignin') return;
+      console.error('[auth]', error);
+    },
+  },
   providers: [
     Credentials({
       credentials: {
