@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { parseAsaasWebhook, AsaasPlatformProvider } from '@hh/billing';
 import { fhirGet, fhirSearch, fhirUpdate } from '@/lib/medplum-client';
 import { getExtension, setExtension, HH_EXT } from '@hh/fhir';
+import { safeCompare } from '@/lib/safe-compare';
 import type { Practitioner } from '@medplum/fhirtypes';
 
 async function findPractitionerBySubscription(subscriptionId: string): Promise<Practitioner | null> {
@@ -44,7 +45,7 @@ async function updateSubscriptionStatus(subscriptionId: string, status: string) 
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get('asaas-access-token');
-  if (secret !== process.env.WEBHOOK_SECRET) {
+  if (!safeCompare(secret, process.env.WEBHOOK_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

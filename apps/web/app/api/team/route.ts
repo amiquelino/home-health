@@ -60,7 +60,11 @@ export const POST = withAuth(async (req: NextRequest, session) => {
   }
 
   // Check email not already taken
-  const emailCheck = await fhirSearch<Practitioner>('Practitioner', { telecom: `email|${email}` });
+  const emailCheck = await fhirSearch<Practitioner>(
+    'Practitioner',
+    { telecom: `email|${email}` },
+    session.user.projectId
+  );
   if (emailCheck.length > 0) {
     return NextResponse.json({ error: 'E-mail já cadastrado' }, { status: 409 });
   }
