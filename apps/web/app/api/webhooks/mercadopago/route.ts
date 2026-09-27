@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { fhirGet, fhirUpdate } from '@/lib/medplum-client';
 import { setExtension } from '@hh/fhir';
 import { MercadoPagoPlatformProvider } from '@hh/billing';
+import { safeCompare } from '@/lib/safe-compare';
 import type { Practitioner } from '@medplum/fhirtypes';
 
 async function updatePractitionerStatus(practitionerId: string, status: string, projectId: string) {
@@ -14,7 +15,7 @@ async function updatePractitionerStatus(practitionerId: string, status: string, 
 export async function POST(req: NextRequest) {
   // Validate secret from query param: configure webhook URL as .../mercadopago?secret=YOUR_SECRET
   const secret = req.nextUrl.searchParams.get('secret');
-  if (!process.env.MERCADOPAGO_WEBHOOK_SECRET || secret !== process.env.MERCADOPAGO_WEBHOOK_SECRET) {
+  if (!safeCompare(secret, process.env.MERCADOPAGO_WEBHOOK_SECRET)) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
